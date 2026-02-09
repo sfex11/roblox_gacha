@@ -9,6 +9,7 @@ local ItemDatabase = require(game.ReplicatedStorage.Modules.ItemDatabase)
 local CurrencyService = require(script.Parent.CurrencyService)
 local InventoryService = require(script.Parent.InventoryService)
 local DataManager = require(script.Parent.DataManager)
+local LLMClient = require(script.Parent.LLMClient)
 
 local GachaService = {}
 
@@ -105,11 +106,32 @@ function GachaService._executeSinglePull(userId, poolId)
         data.stats.totalPulls = (data.stats.totalPulls or 0) + 1
     end
 
+    -- LLM 텍스트 생성 (활성화 시)
+    local itemName = template and template.name or "???"
+    local itemDesc = template and template.description or ""
+    local itemFlavor = template and template.flavorText or ""
+
+    if LLMClient.IsEnabled() and template then
+        local llmResult = LLMClient.RequestText(
+            templateId,
+            rarity,
+            template.category,
+            template.name,
+            { tone = "default" }
+        )
+        if llmResult and llmResult.success then
+            itemName = llmResult.name or itemName
+            itemDesc = llmResult.description or itemDesc
+            itemFlavor = llmResult.flavorText or itemFlavor
+        end
+    end
+
     return {
         templateId = templateId,
         rarity = rarity,
-        name = template and template.name or "???",
-        description = template and template.description or "",
+        name = itemName,
+        description = itemDesc,
+        flavorText = itemFlavor,
         isNew = isNew and not isDuplicate,
         isDuplicate = isDuplicate,
         duplicateCoins = duplicateCoins,

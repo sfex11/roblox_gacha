@@ -244,8 +244,8 @@ function GachaAnimation.PlaySingle(item, callback)
 
         -- 카드 등장 애니메이션
         local cardAppear = TweenService:Create(resultCard, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 260, 0, 340),
-            Position = UDim2.new(0.5, -130, 0.5, -170),
+            Size = UDim2.new(0, 260, 0, 380),
+            Position = UDim2.new(0.5, -130, 0.5, -190),
         })
         cardAppear:Play()
         cardAppear.Completed:Wait()
@@ -286,20 +286,34 @@ function GachaAnimation.PlaySingle(item, callback)
 
         -- 설명
         local descLabel = Instance.new("TextLabel")
-        descLabel.Size = UDim2.new(1, -20, 0, 40)
-        descLabel.Position = UDim2.new(0, 10, 0, 220)
+        descLabel.Size = UDim2.new(1, -20, 0, 36)
+        descLabel.Position = UDim2.new(0, 10, 0, 218)
         descLabel.BackgroundTransparency = 1
         descLabel.Text = item.description or ""
         descLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-        descLabel.TextSize = 13
+        descLabel.TextSize = 12
         descLabel.Font = Enum.Font.Gotham
         descLabel.TextWrapped = true
         descLabel.Parent = resultCard
 
+        -- 플레이버 텍스트 (LLM 생성 시 표시)
+        if item.flavorText and item.flavorText ~= "" then
+            local flavorLabel = Instance.new("TextLabel")
+            flavorLabel.Size = UDim2.new(1, -20, 0, 24)
+            flavorLabel.Position = UDim2.new(0, 10, 0, 258)
+            flavorLabel.BackgroundTransparency = 1
+            flavorLabel.Text = '"' .. item.flavorText .. '"'
+            flavorLabel.TextColor3 = Color3.fromRGB(140, 160, 200)
+            flavorLabel.TextSize = 11
+            flavorLabel.Font = Enum.Font.GothamItalic
+            flavorLabel.TextWrapped = true
+            flavorLabel.Parent = resultCard
+        end
+
         -- NEW / 중복 표시
         local statusLabel = Instance.new("TextLabel")
         statusLabel.Size = UDim2.new(1, 0, 0, 30)
-        statusLabel.Position = UDim2.new(0, 0, 0, 270)
+        statusLabel.Position = UDim2.new(0, 0, 0, 290)
         statusLabel.BackgroundTransparency = 1
         statusLabel.TextSize = 18
         statusLabel.Font = Enum.Font.GothamBold

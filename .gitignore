@@ -17,3 +17,7 @@ Thumbs.db
 
 # Roblox Studio 자동 저장
 *.rbxlx.lock
+
+# Backend
+backend/node_modules/
+backend/.env

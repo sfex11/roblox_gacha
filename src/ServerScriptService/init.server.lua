@@ -13,6 +13,7 @@ local CurrencyService = require(script.CurrencyService)
 local InventoryService = require(script.InventoryService)
 local CodexService = require(script.CodexService)
 local MinigameService = require(script.MinigameService)
+local LLMClient = require(script.LLMClient)
 local Constants = require(ReplicatedStorage.Modules.Constants)
 
 -------------------------------------------------------
@@ -141,6 +142,19 @@ remotes[Constants.Remotes.JoinMinigame].OnServerEvent:Connect(function(player, a
         remotes[Constants.Remotes.MinigameStateUpdate]:FireClient(player, {
             type = "queue_left",
         })
+    end
+end)
+
+-------------------------------------------------------
+-- LLM 백엔드 헬스체크 (서버 시작 시)
+-------------------------------------------------------
+task.spawn(function()
+    local health = LLMClient.HealthCheck()
+    if health.online then
+        print("[MainServer] LLM 백엔드 연결 확인됨 — LLM 활성화")
+        LLMClient.SetEnabled(true)
+    else
+        print("[MainServer] LLM 백엔드 미연결 — 프리셋 텍스트 모드")
     end
 end)
 

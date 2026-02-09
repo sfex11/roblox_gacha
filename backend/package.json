@@ -1,0 +1,16 @@
+{
+  "name": "gacha-llm-backend",
+  "version": "1.0.0",
+  "description": "Roblox 가차 게임 LLM 텍스트 생성 백엔드",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "express": "^4.21.0",
+    "helmet": "^8.0.0",
+    "express-rate-limit": "^7.4.0"
+  }
+}

@@ -1,0 +1,6 @@
+# Rokit(Foreman 후속) — 도구 버전 관리
+# 설치: https://github.com/rojo-rbx/rokit
+# 사용: rokit install
+
+[tools]
+rojo = "rojo-rbx/rojo@7.4.4"

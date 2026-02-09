@@ -1,0 +1,42 @@
+{
+    "name": "roblox-gacha",
+    "tree": {
+        "$className": "DataModel",
+
+        "ReplicatedStorage": {
+            "$className": "ReplicatedStorage",
+            "$ignoreUnknownInstances": true,
+            "Modules": {
+                "$path": "src/ReplicatedStorage/Modules"
+            }
+        },
+
+        "ServerScriptService": {
+            "$className": "ServerScriptService",
+            "$ignoreUnknownInstances": true,
+            "GachaServer": {
+                "$path": "src/ServerScriptService"
+            }
+        },
+
+        "ServerStorage": {
+            "$className": "ServerStorage",
+            "$ignoreUnknownInstances": true,
+            "Templates": {
+                "$path": "src/ServerStorage/Templates"
+            }
+        },
+
+        "StarterPlayer": {
+            "$className": "StarterPlayer",
+            "$ignoreUnknownInstances": true,
+            "StarterPlayerScripts": {
+                "$className": "StarterPlayerScripts",
+                "$ignoreUnknownInstances": true,
+                "GachaClient": {
+                    "$path": "src/StarterPlayer/StarterPlayerScripts"
+                }
+            }
+        }
+    }
+}

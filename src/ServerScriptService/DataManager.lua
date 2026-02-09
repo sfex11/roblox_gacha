@@ -29,8 +29,8 @@ local function getDefaultData()
         codex = {},              -- { [templateId] = true }
         completedSets = {},      -- { [setId] = true }
         currency = {
-            Coins = 0,
-            Tickets = 3,         -- 시작 시 3장
+            Coins = 500,         -- 시작 시 500코인 (바로 5회 뽑기 가능)
+            Tickets = 5,         -- 시작 시 5장
         },
         stats = {
             totalPulls = 0,

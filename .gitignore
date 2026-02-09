@@ -1,0 +1,19 @@
+# Roblox Studio 빌드 결과물
+*.rbxlx
+*.rbxl
+*.rbxm
+*.rbxmx
+
+# Rojo 빌드 출력
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Roblox Studio 자동 저장
+*.rbxlx.lock

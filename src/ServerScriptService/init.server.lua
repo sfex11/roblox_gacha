@@ -6,13 +6,13 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- 서비스 로드
-local DataManager = require(script.Parent.DataManager)
-local GachaService = require(script.Parent.GachaService)
-local CurrencyService = require(script.Parent.CurrencyService)
-local InventoryService = require(script.Parent.InventoryService)
-local CodexService = require(script.Parent.CodexService)
-local MinigameService = require(script.Parent.MinigameService)
+-- 서비스 로드 (Rojo: init.server.lua이므로 하위 모듈은 script.X)
+local DataManager = require(script.DataManager)
+local GachaService = require(script.GachaService)
+local CurrencyService = require(script.CurrencyService)
+local InventoryService = require(script.InventoryService)
+local CodexService = require(script.CodexService)
+local MinigameService = require(script.MinigameService)
 local Constants = require(ReplicatedStorage.Modules.Constants)
 
 -------------------------------------------------------

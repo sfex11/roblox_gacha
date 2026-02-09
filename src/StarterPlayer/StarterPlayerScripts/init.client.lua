@@ -10,12 +10,12 @@ local Constants = require(ReplicatedStorage.Modules.Constants)
 
 local player = Players.LocalPlayer
 
--- UI 모듈 로드
-local HubUI = require(script.Parent.HubUI)
-local GachaUI = require(script.Parent.GachaUI)
-local InventoryUI = require(script.Parent.InventoryUI)
-local CodexUI = require(script.Parent.CodexUI)
-local MinigameUI = require(script.Parent.MinigameUI)
+-- UI 모듈 로드 (Rojo: init.client.lua이므로 하위 모듈은 script.X)
+local HubUI = require(script.HubUI)
+local GachaUI = require(script.GachaUI)
+local InventoryUI = require(script.InventoryUI)
+local CodexUI = require(script.CodexUI)
+local MinigameUI = require(script.MinigameUI)
 
 -------------------------------------------------------
 -- Remote 참조 대기

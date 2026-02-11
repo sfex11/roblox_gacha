@@ -1,19 +1,24 @@
 /**
- * LLM 텍스트 생성 모듈 — Anthropic Claude API
+ * LLM 텍스트 생성 모듈 — GLM-4.7 (Z.ai) API
+ * OpenAI 호환 API 사용
  */
 
-const Anthropic = require("@anthropic-ai/sdk");
+const OpenAI = require("openai");
 const config = require("./config");
 const cache = require("./cache");
 const { validateLlmResponse } = require("./filter");
 
-let client = null;
+let glmClient = null;
 
-function getClient() {
-    if (!client) {
-        client = new Anthropic({ apiKey: config.anthropicApiKey });
+function getGlmClient() {
+    if (!glmClient) {
+        glmClient = new OpenAI({
+            apiKey: config.zaiApiKey,
+            baseURL: config.llm.glmBaseUrl,
+            timeout: 15000, // 15초 타임아웃
+        });
     }
-    return client;
+    return glmClient;
 }
 
 // 테마별 톤 가이드
@@ -53,7 +58,7 @@ async function generateItemText(params) {
     } = params;
 
     // 1. 캐시 확인
-    const cached = cache.get(templateId, locale, theme);
+    const cached = cache.get(templateId, locale, theme, tone);
     if (cached) {
         return { success: true, data: cached, source: "cache" };
     }
@@ -63,39 +68,36 @@ async function generateItemText(params) {
     const keywordStr =
         keywords.length > 0 ? `키워드: ${keywords.join(", ")}` : "";
 
-    const prompt = `당신은 Roblox 가차 게임의 아이템 텍스트 작가입니다.
+    const systemPrompt = `아이템 텍스트 생성. JSON만 출력.`;
 
-아래 아이템에 어울리는 이름/설명/플레이버 텍스트를 한국어로 생성하세요.
+    const userPrompt = `${category} ${rarity} ${baseName}
+${tone} 톤으로 이름/설명/대사 생성:
 
-## 아이템 정보
-- 카테고리: ${category}
-- 희귀도: ${rarity}
-- 기본 이름 참고: ${baseName}
-- 테마: ${theme}
-${keywordStr}
-
-## 톤 가이드
-${toneGuide}
-
-## 규칙 (반드시 준수)
-- name: 최대 20자, 아이템 이름
-- description: 최대 120자, 아이템 설명
-- flavorText: 최대 80자, 분위기 있는 한 줄 대사
-- 욕설, 선정적, 폭력 조장, 개인정보, 실존 브랜드/유명인 금지
-- 도박/현금 가치 암시 금지
-
-## 출력 형식 (JSON만 출력)
-{"name": "...", "description": "...", "flavorText": "...", "tagsSuggested": ["tag1", "tag2"]}`;
+{"name":"${baseName}+","description":"강력한 무기다","flavorText":"전설의 아이템","tagsSuggested":["${rarity}","${category}"]}`;
 
     try {
-        const response = await getClient().messages.create({
-            model: config.llm.model,
-            max_tokens: config.llm.maxTokens,
+        console.log("[llm.js] GLM 클라이언트 가져오는 중...");
+        const client = getGlmClient();
+
+        console.log("[llm.js] GLM API 호출 시작 - model:", config.llm.glmModel);
+        const response = await client.chat.completions.create({
+            model: config.llm.glmModel,
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+            ],
+            max_completion_tokens: config.llm.maxTokens,  // GLM-4.7용 파라미터
             temperature: config.llm.temperature,
-            messages: [{ role: "user", content: prompt }],
         });
 
-        const text = response.content[0]?.text || "";
+        console.log("[llm.js] GLM API 응답 (전체):", JSON.stringify(response, null, 2));
+        console.log("[llm.js] GLM API 응답 수신 - choices 수:", response.choices?.length);
+
+        // GLM-4.7은 reasoning_content에 응답이 담겨 있음
+        const message = response.choices[0]?.message || {};
+        const text = message.reasoning_content || message.content || "";
+        console.log("[llm.js] 생성된 텍스트 (전체):", text);
+        console.log("[llm.js] 생성된 텍스트 길이:", text.length);
 
         // JSON 추출 (코드블록 감싸기 대응)
         const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -119,10 +121,12 @@ ${toneGuide}
         }
 
         // 3. 캐시 저장
-        cache.set(templateId, locale, theme, validation.data);
+        cache.set(templateId, locale, theme, tone, validation.data);
 
         return { success: true, data: validation.data, source: "llm" };
     } catch (err) {
+        console.error("[llm.js] LLM API 호출 실패:", err.message);
+        console.error("[llm.js] 에러 스택:", err.stack);
         return {
             success: false,
             error: "llm_api_error",
@@ -145,4 +149,4 @@ async function batchGenerate(items, options = {}) {
     return results;
 }
 
-module.exports = { generateItemText, batchGenerate };
+module.exports = { generateItemText, batchGenerate, getGlmClient };

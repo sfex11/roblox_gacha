@@ -5,17 +5,41 @@
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 
 local Constants = require(game.ReplicatedStorage.Modules.Constants)
+local GameConfig = require(script.Parent.GameConfig)
 
 local DataManager = {}
 
-local DATASTORE_NAME = "PlayerData_v1"
+local DATASTORE_NAME = (GameConfig.Data and GameConfig.Data.dataStoreName) or "PlayerData_v1"
 local AUTOSAVE_INTERVAL = 120 -- 2분마다 자동저장
 
-local dataStore = DataStoreService:GetDataStore(DATASTORE_NAME)
+local dataStore = nil -- 지연 초기화
 local playerDataCache = {} -- [userId] = data
+
+-- DataStore 지연 초기화 helper
+local function getDataStore()
+    if dataStore then
+        return dataStore
+    end
+
+    local cfg = GameConfig.Data or {}
+    if cfg.forceFreshData or cfg.enableDataStore == false then
+        return nil
+    end
+
+    local success, ds = pcall(function()
+        return DataStoreService:GetDataStore(DATASTORE_NAME)
+    end)
+
+    if success then
+        dataStore = ds
+        return dataStore
+    else
+        warn("[DataManager] DataStore 초기화 실패:", tostring(ds))
+        return nil
+    end
+end
 
 -- 기본 플레이어 데이터 템플릿
 local function getDefaultData()
@@ -29,8 +53,8 @@ local function getDefaultData()
         codex = {},              -- { [templateId] = true }
         completedSets = {},      -- { [setId] = true }
         currency = {
-            Coins = 500,         -- 시작 시 500코인 (바로 5회 뽑기 가능)
-            Tickets = 5,         -- 시작 시 5장
+            Coins = 10000,       -- 시작 코인 (테스트용)
+            Tickets = 100,       -- 시작 티켓 (테스트용)
         },
         stats = {
             totalPulls = 0,
@@ -39,39 +63,72 @@ local function getDefaultData()
     }
 end
 
+local function deepMergeDefaults(default, data)
+    if type(default) ~= "table" then
+        return data
+    end
+    if type(data) ~= "table" then
+        data = {}
+    end
+
+    for key, defaultValue in pairs(default) do
+        local dataValue = data[key]
+        if dataValue == nil then
+            if type(defaultValue) == "table" then
+                local copy = {}
+                deepMergeDefaults(defaultValue, copy)
+                data[key] = copy
+            else
+                data[key] = defaultValue
+            end
+        elseif type(defaultValue) == "table" then
+            data[key] = deepMergeDefaults(defaultValue, dataValue)
+        end
+    end
+
+    return data
+end
+
 -- 데이터 로드
 function DataManager.LoadData(player)
     local userId = player.UserId
     local key = "player_" .. tostring(userId)
 
-    local success, data = pcall(function()
-        return dataStore:GetAsync(key)
-    end)
+    local cfg = GameConfig.Data or {}
 
-    if success and data then
-        -- 기본값 병합 (새 필드 추가 대응)
-        local default = getDefaultData()
-        for k, v in pairs(default) do
-            if data[k] == nil then
-                data[k] = v
-            end
-        end
-        if data.currency then
-            for ck, cv in pairs(default.currency) do
-                if data.currency[ck] == nil then
-                    data.currency[ck] = cv
-                end
-            end
-        end
-        playerDataCache[userId] = data
+    local data
+    if cfg.forceFreshData then
+        data = getDefaultData()
+        print("[DataManager] ForceFreshData 활성 — 새 데이터 생성:", userId)
     else
-        playerDataCache[userId] = getDefaultData()
+        local ds = getDataStore()
+        if ds then
+            local success, loaded = pcall(function()
+                return ds:GetAsync(key)
+            end)
+
+            if success and type(loaded) == "table" then
+                data = deepMergeDefaults(getDefaultData(), loaded)
+                print("[DataManager] 데이터 로드 성공:", userId)
+            else
+                if not success then
+                    warn("[DataManager] Load failed for " .. tostring(userId) .. ": " .. tostring(loaded))
+                end
+                data = getDefaultData()
+                print("[DataManager] 데이터 없음/실패 — 새 데이터 생성:", userId)
+            end
+        else
+            data = getDefaultData()
+            print("[DataManager] DataStore 비활성 — 새 데이터 생성:", userId)
+        end
     end
+
+    playerDataCache[userId] = data
 
     -- 일일 티켓 리셋 확인
     DataManager._checkDailyReset(userId)
 
-    return playerDataCache[userId]
+    return data
 end
 
 -- 데이터 저장
@@ -80,9 +137,24 @@ function DataManager.SaveData(player)
     local data = playerDataCache[userId]
     if not data then return false end
 
+    local cfg = GameConfig.Data or {}
+    if cfg.forceFreshData or cfg.enableDataStore == false then
+        return true
+    end
+
+    local ds = getDataStore()
+    if not ds then
+        return true -- DataStore 없으면 저장 성공으로 처리
+    end
+
     local key = "player_" .. tostring(userId)
     local success, err = pcall(function()
-        dataStore:SetAsync(key, data)
+        ds:UpdateAsync(key, function(old)
+            if type(old) == "table" then
+                old = deepMergeDefaults(getDefaultData(), old)
+            end
+            return data
+        end)
     end)
 
     if not success then

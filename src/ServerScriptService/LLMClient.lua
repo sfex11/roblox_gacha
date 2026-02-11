@@ -16,7 +16,7 @@ local LLMClient = {}
 LLMClient.Config = {
     backendUrl = "http://localhost:3001",  -- 프로덕션에서는 실제 URL로 교체
     sharedSecret = "dev-secret",            -- .env와 일치시킬 것
-    timeoutSeconds = 5,
+    timeoutSeconds = 10,  -- 10초 타임아웃 (캐시는 1초 이내, 새 요청은 5~10초)
     enabled = false,  -- true로 변경하면 LLM 활성화 (기본: 프리셋만)
 }
 
@@ -24,11 +24,15 @@ LLMClient.Config = {
 -- 백엔드에 텍스트 생성 요청
 -------------------------------------------------------
 function LLMClient.RequestText(templateId, rarity, category, baseName, options)
+    print("[LLMClient] RequestText 호출 - enabled:", LLMClient.Config.enabled, "templateId:", templateId)
+
     if not LLMClient.Config.enabled then
+        print("[LLMClient] LLM 비활성화 - 폴백 반환")
         return LLMClient._getFallback(templateId)
     end
 
     options = options or {}
+    print("[LLMClient] 백엔드 요청 시작...")
 
     local requestBody = {
         requestId = HttpService:GenerateGUID(false),
@@ -43,6 +47,7 @@ function LLMClient.RequestText(templateId, rarity, category, baseName, options)
     }
 
     local success, response = pcall(function()
+        print("[LLMClient] HTTP 요청 전송:", LLMClient.Config.backendUrl .. "/api/generate")
         return HttpService:RequestAsync({
             Url = LLMClient.Config.backendUrl .. "/api/generate",
             Method = "POST",
@@ -53,6 +58,8 @@ function LLMClient.RequestText(templateId, rarity, category, baseName, options)
             Body = HttpService:JSONEncode(requestBody),
         })
     end)
+
+    print("[LLMClient] HTTP 요청 완료 - success:", success)
 
     if not success then
         warn("[LLMClient] HTTP 요청 실패: " .. tostring(response))
@@ -154,9 +161,11 @@ function LLMClient.HealthCheck()
         })
     end)
 
-    if success and response.StatusCode == 200 then
-        local data = HttpService:JSONDecode(response.Body)
-        return { online = true, data = data }
+    if success and response and response.StatusCode == 200 then
+        local decodeOk, data = pcall(function()
+            return HttpService:JSONDecode(response.Body)
+        end)
+        return { online = true, data = decodeOk and data or nil }
     end
 
     return { online = false }

@@ -1,16 +1,21 @@
 // 환경 변수 기본값
 const config = {
     port: parseInt(process.env.PORT || "3001", 10),
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
+    zaiApiKey: process.env.ZAI_API_KEY || "", // GLM-4.7용 API 키
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || "", // 폴백용
     robloxSharedSecret: process.env.ROBLOX_SHARED_SECRET || "dev-secret",
+    authMode: process.env.ROBLOX_AUTH_MODE || "simple", // "simple" | "signature"
     cacheTtl: parseInt(process.env.CACHE_TTL || "3600", 10),
-    llmTimeout: parseInt(process.env.LLM_TIMEOUT || "5000", 10),
+    llmTimeout: parseInt(process.env.LLM_TIMEOUT || "30000", 10),  // 30초로 증가
 
     // LLM 프롬프트 설정
     llm: {
-        model: "claude-sonnet-4-5-20250929",
-        maxTokens: 300,
-        temperature: 0.9,
+        provider: "glm", // "glm" | "anthropic"
+        glmBaseUrl: "https://api.z.ai/api/coding/paas/v4",
+        glmModel: "glm-4.7",
+        anthropicModel: "claude-sonnet-4-5-20250929",
+        maxTokens: 1000,  // GLM-4.7 reasoning 모델은 더 많은 토큰 필요
+        temperature: 0.7,  // 낮춰서 더 결정적인 출력
     },
 
     // 레이트 리밋

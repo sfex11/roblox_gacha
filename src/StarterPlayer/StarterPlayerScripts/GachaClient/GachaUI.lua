@@ -200,14 +200,18 @@ function GachaUI.ShowResult(items)
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "GachaResult"
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.DisplayOrder = 10
+    screenGui.DisplayOrder = 100
+    screenGui.IgnoreGuiInset = true
     screenGui.Parent = playerGui
 
-    -- 배경 오버레이
-    local overlay = Instance.new("Frame")
+    -- 배경 오버레이 (클릭 가능하도록 TextButton)
+    local overlay = Instance.new("TextButton")
     overlay.Size = UDim2.new(1, 0, 1, 0)
     overlay.BackgroundColor3 = Color3.new(0, 0, 0)
     overlay.BackgroundTransparency = 0.5
+    overlay.ZIndex = 1
+    overlay.Text = ""
+    overlay.AutoButtonColor = false
     overlay.Parent = screenGui
 
     -- 결과 컨테이너
@@ -217,6 +221,7 @@ function GachaUI.ShowResult(items)
     container.Position = UDim2.new(0.5, -240, 0.5, -250)
     container.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
     container.ScrollBarThickness = 4
+    container.ZIndex = 2
     container.Parent = screenGui
 
     local containerCorner = Instance.new("UICorner")
@@ -248,6 +253,7 @@ function GachaUI.ShowResult(items)
 
     -- 닫기 버튼
     local closeBtn = Instance.new("TextButton")
+    closeBtn.Name = "CloseResultBtn"
     closeBtn.Size = UDim2.new(0, 200, 0, 45)
     closeBtn.Position = UDim2.new(0.5, -100, 0.5, 270)
     closeBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
@@ -255,6 +261,8 @@ function GachaUI.ShowResult(items)
     closeBtn.TextColor3 = Color3.new(1, 1, 1)
     closeBtn.TextSize = 18
     closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.ZIndex = 10
+    closeBtn.Active = true
     closeBtn.Parent = screenGui
 
     local closeBtnCorner = Instance.new("UICorner")
@@ -264,6 +272,15 @@ function GachaUI.ShowResult(items)
     closeBtn.MouseButton1Click:Connect(function()
         screenGui:Destroy()
     end)
+
+    -- 배경 클릭 시에도 닫기
+    overlay.MouseButton1Click:Connect(function()
+        if screenGui and screenGui.Parent then
+            screenGui:Destroy()
+        end
+    end)
+
+    overlay.Active = true
 end
 
 function GachaUI._createResultCard(item, index)
@@ -309,8 +326,8 @@ function GachaUI._createResultCard(item, index)
 
     -- 아이템 이름
     local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, -10, 0, 20)
-    nameLabel.Position = UDim2.new(0, 5, 0, 115)
+    nameLabel.Size = UDim2.new(1, -10, 0, 18)
+    nameLabel.Position = UDim2.new(0, 5, 0, 112)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = item.name or "???"
     nameLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -319,12 +336,38 @@ function GachaUI._createResultCard(item, index)
     nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
     nameLabel.Parent = card
 
+    -- 아이템 설명
+    local descLabel = Instance.new("TextLabel")
+    descLabel.Size = UDim2.new(1, -10, 0, 24)
+    descLabel.Position = UDim2.new(0, 5, 0, 132)
+    descLabel.BackgroundTransparency = 1
+    descLabel.Text = item.description or ""
+    descLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    descLabel.TextSize = 10
+    descLabel.Font = Enum.Font.Gotham
+    descLabel.TextWrapped = true
+    descLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    descLabel.Parent = card
+
+    -- Flavor Text
+    local flavorLabel = Instance.new("TextLabel")
+    flavorLabel.Size = UDim2.new(1, -10, 0, 16)
+    flavorLabel.Position = UDim2.new(0, 5, 0, 158)
+    flavorLabel.BackgroundTransparency = 1
+    flavorLabel.Text = "\"" .. (item.flavorText or "") .. "\""
+    flavorLabel.TextColor3 = Color3.fromRGB(180, 180, 255)
+    flavorLabel.TextSize = 9
+    flavorLabel.Font = Enum.Font.Gotham
+    flavorLabel.TextWrapped = true
+    flavorLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    flavorLabel.Parent = card
+
     -- NEW / 중복 표시
     local statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(1, 0, 0, 20)
-    statusLabel.Position = UDim2.new(0, 0, 0, 138)
+    statusLabel.Size = UDim2.new(1, 0, 0, 18)
+    statusLabel.Position = UDim2.new(0, 0, 0, 176)
     statusLabel.BackgroundTransparency = 1
-    statusLabel.TextSize = 12
+    statusLabel.TextSize = 11
     statusLabel.Font = Enum.Font.GothamBold
     statusLabel.Parent = card
 

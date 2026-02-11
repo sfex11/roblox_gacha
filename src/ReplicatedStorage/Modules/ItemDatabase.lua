@@ -194,10 +194,34 @@ function ItemDatabase.Init()
         end
         table.insert(ItemDatabase._byRarity[template.rarity], id)
     end
+
+    -- UGC 아이템도 인덱스에 추가
+    local UGCDatabase = require(script.Parent.UGCDatabase)
+    for templateId, item in pairs(UGCDatabase.GetAll()) do
+        -- 카테고리별 (UGC)
+        if not ItemDatabase._byCategory[Constants.Category.UGC] then
+            ItemDatabase._byCategory[Constants.Category.UGC] = {}
+        end
+        table.insert(ItemDatabase._byCategory[Constants.Category.UGC], templateId)
+
+        -- 희귀도별
+        if not ItemDatabase._byRarity[item.rarity] then
+            ItemDatabase._byRarity[item.rarity] = {}
+        end
+        table.insert(ItemDatabase._byRarity[item.rarity], templateId)
+    end
 end
 
 function ItemDatabase.GetTemplate(templateId)
-    return ItemDatabase.Templates[templateId]
+    -- 먼저 정적 템플릿에서 검색
+    local template = ItemDatabase.Templates[templateId]
+    if template then
+        return template
+    end
+
+    -- UGC 데이터베이스에서 검색
+    local UGCDatabase = require(script.Parent.UGCDatabase)
+    return UGCDatabase.GetItem(templateId)
 end
 
 function ItemDatabase.GetByCategory(category)

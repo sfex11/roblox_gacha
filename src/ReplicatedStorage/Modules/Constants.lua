@@ -48,12 +48,25 @@ Constants.Category = {
     Weapon = "Weapon",
     Pet = "Pet",
     Costume = "Costume",
+    UGC = "UGC",  -- 사용자 생성 콘텐츠 (액세서리)
 }
 
 Constants.CategoryInfo = {
     [Constants.Category.Weapon] = { displayName = "무기", icon = "rbxassetid://0" },
     [Constants.Category.Pet]    = { displayName = "펫",   icon = "rbxassetid://0" },
     [Constants.Category.Costume]= { displayName = "코스튬", icon = "rbxassetid://0" },
+    [Constants.Category.UGC]    = { displayName = "액세서리", icon = "rbxassetid://0" },
+}
+
+-- UGC 아이템 타입 (액세서리 종류)
+Constants.UGCType = {
+    Hat = "Hat",
+    Hair = "Hair",
+    Face = "Face",
+    Back = "Back",
+    Front = "Front",
+    Shoulder = "Shoulder",
+    Waist = "Waist",
 }
 
 -- 재화 종류

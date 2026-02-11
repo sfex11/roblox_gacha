@@ -10,6 +10,31 @@ local InventoryService = require(script.Parent.InventoryService)
 
 local MinigameService = {}
 
+-- init.server.lua에서 주입되는 RemoteEvent 참조
+local remoteStateUpdate = nil
+local remoteResult = nil
+
+function MinigameService.SetRemotes(stateUpdateRemote, resultRemote)
+    remoteStateUpdate = stateUpdateRemote
+    remoteResult = resultRemote
+end
+
+local function broadcast(players, payload)
+    if not remoteStateUpdate then return end
+    for _, plr in ipairs(players) do
+        if plr and plr.Parent then
+            remoteStateUpdate:FireClient(plr, payload)
+        end
+    end
+end
+
+local function sendResult(player, payload)
+    if not remoteResult then return end
+    if player and player.Parent then
+        remoteResult:FireClient(player, payload)
+    end
+end
+
 -- 대기열
 local queue = {}        -- { player, ... }
 local activeSessions = {} -- { [sessionId] = sessionData }
@@ -50,6 +75,53 @@ local WaveEnemies = {
     },
 }
 
+local function calculateWaveDuration(session, wave)
+    -- 공격력이 높을수록 조금 더 빨리 끝나는 "시뮬레이션" 웨이브
+    local baseByWave = { [1] = 8, [2] = 10, [3] = 12 }
+    local base = baseByWave[wave] or 10
+
+    local totalAttack = 0
+    for _, stat in pairs(session.playerStats) do
+        totalAttack = totalAttack + (stat.attack or 0)
+    end
+
+    local reduce = totalAttack / 60 -- 공격력 60당 1초 단축
+    return math.max(4, base - reduce)
+end
+
+local function distributeKills(session, totalEnemies)
+    local players = {}
+    local totalWeight = 0
+
+    for _, plr in ipairs(session.players) do
+        if plr and plr.Parent then
+            local stat = session.playerStats[plr.UserId]
+            if stat and stat.alive ~= false then
+                local w = math.max(1, stat.attack or 1)
+                totalWeight = totalWeight + w
+                table.insert(players, { player = plr, weight = w })
+            end
+        end
+    end
+
+    if #players == 0 or totalEnemies <= 0 then return end
+
+    for _ = 1, totalEnemies do
+        local roll = math.random(1, totalWeight)
+        local cumulative = 0
+        for _, entry in ipairs(players) do
+            cumulative = cumulative + entry.weight
+            if roll <= cumulative then
+                local stat = session.playerStats[entry.player.UserId]
+                if stat then
+                    stat.kills = (stat.kills or 0) + 1
+                end
+                break
+            end
+        end
+    end
+end
+
 -- 대기열에 플레이어 추가
 function MinigameService.JoinQueue(player)
     -- 이미 대기 중인지 확인
@@ -68,17 +140,23 @@ function MinigameService.JoinQueue(player)
         end
     end
 
+    local position = #queue + 1
     table.insert(queue, player)
 
     -- 최소 인원 충족 시 게임 시작
+    local startedSession = nil
     if #queue >= Constants.Minigame.MinPlayers then
-        MinigameService._tryStartGame()
+        startedSession = MinigameService._tryStartGame()
     end
+
+    local startedForThisPlayer = startedSession and table.find(startedSession.players, player) ~= nil
 
     return {
         success = true,
-        position = #queue,
-        message = "대기열에 참가했습니다. (" .. #queue .. "명 대기 중)",
+        position = position,
+        message = startedForThisPlayer and "게임을 시작합니다!" or ("대기열에 참가했습니다. (" .. #queue .. "명 대기 중)"),
+        started = startedForThisPlayer,
+        sessionId = startedForThisPlayer and startedSession.sessionId or nil,
     }
 end
 
@@ -91,6 +169,33 @@ function MinigameService.LeaveQueue(player)
         end
     end
     return false
+end
+
+-- 대기열/세션에서 플레이어 제거 (나가기/퇴장 처리)
+function MinigameService.RemovePlayer(player)
+    MinigameService.LeaveQueue(player)
+
+    for sessionId, session in pairs(activeSessions) do
+        for i = #session.players, 1, -1 do
+            if session.players[i] == player then
+                table.remove(session.players, i)
+                local stat = session.playerStats[player.UserId]
+                if stat then
+                    stat.alive = false
+                end
+                broadcast(session.players, {
+                    type = "player_left",
+                    sessionId = sessionId,
+                    userId = player.UserId,
+                })
+                break
+            end
+        end
+
+        if #session.players == 0 then
+            activeSessions[sessionId] = nil
+        end
+    end
 end
 
 -- 게임 시작 시도
@@ -132,6 +237,14 @@ function MinigameService._tryStartGame()
 
     activeSessions[sessionId] = session
 
+    -- 세션 시작 알림
+    broadcast(sessionPlayers, {
+        type = "session_start",
+        sessionId = sessionId,
+        startIn = 3,
+        waveCount = Constants.Minigame.WaveCount,
+    })
+
     -- 3초 후 첫 웨이브 시작
     task.delay(3, function()
         MinigameService._startWave(sessionId)
@@ -160,13 +273,24 @@ function MinigameService._startWave(sessionId)
 
     session.enemiesRemaining = totalEnemies
 
-    -- 클라이언트에 웨이브 시작 알림 (실제 구현에서는 RemoteEvent)
-    -- 여기서는 시뮬레이션으로 일정 시간 후 웨이브 완료 처리
-    return {
+    broadcast(session.players, {
+        type = "wave_start",
+        sessionId = sessionId,
         wave = session.currentWave,
         enemies = waveData,
         totalEnemies = totalEnemies,
-    }
+        duration = calculateWaveDuration(session, session.currentWave),
+    })
+
+    -- 실제 전투 구현 전 MVP: 일정 시간 후 자동 클리어
+    local duration = calculateWaveDuration(session, session.currentWave)
+    task.delay(duration, function()
+        local latest = activeSessions[sessionId]
+        if not latest or latest.state ~= "wave_active" then return end
+        distributeKills(latest, latest.enemiesRemaining)
+        latest.enemiesRemaining = 0
+        MinigameService._clearWave(sessionId)
+    end)
 end
 
 -- 적 처치 (클라이언트에서 서버로 호출)
@@ -196,6 +320,12 @@ function MinigameService._clearWave(sessionId)
     local wave = session.currentWave
     local reward = WaveRewards[wave]
     if not reward then return end
+
+    broadcast(session.players, {
+        type = "wave_clear",
+        sessionId = sessionId,
+        wave = wave,
+    })
 
     -- 웨이브별 보상 기록
     session.waveResults[wave] = {
@@ -272,6 +402,22 @@ function MinigameService._completeSession(sessionId, success)
             }
         end
     end
+
+    -- 결과 전송
+    for _, player in ipairs(session.players) do
+        if player and player.Parent then
+            local payload = results[player.UserId]
+            if payload then
+                sendResult(player, payload)
+            end
+        end
+    end
+
+    broadcast(session.players, {
+        type = "session_end",
+        sessionId = sessionId,
+        success = success,
+    })
 
     -- 세션 정리 (30초 후)
     task.delay(30, function()

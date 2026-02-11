@@ -21,3 +21,13 @@ Thumbs.db
 # Backend
 backend/node_modules/
 backend/.env
+
+# Backend generated artifacts
+backend/exports/
+backend/blender-scripts/generate_*.py
+
+# Local experiments (may contain secrets)
+glm47_test.py
+
+# Local tooling clones/build artifacts
+tools/StudioMCP/

@@ -7,11 +7,26 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Constants = require(ReplicatedStorage.Modules.Constants)
+local ItemDatabase = require(ReplicatedStorage.Modules.ItemDatabase)
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local CodexUI = {}
+
+CodexUI._activeTab = "전체"
+CodexUI._tabButtons = {}
+CodexUI._data = {
+    codex = nil,
+    sets = nil,
+    progress = nil,
+}
+
+local function setTabButtonStyle(tabBtn, isActive)
+    if not tabBtn then return end
+    tabBtn.BackgroundColor3 = isActive and Color3.fromRGB(70, 70, 100) or Color3.fromRGB(50, 50, 70)
+    tabBtn.TextColor3 = isActive and Color3.new(1, 1, 1) or Color3.fromRGB(180, 180, 180)
+end
 
 function CodexUI.Create(parentGui)
     local panel = Instance.new("Frame")
@@ -89,6 +104,7 @@ function CodexUI.Create(parentGui)
 
     local tabs = { "전체", "무기", "펫", "코스튬", "세트" }
     for _, tabName in ipairs(tabs) do
+        local currentTabName = tabName
         local tab = Instance.new("TextButton")
         tab.Name = "Tab_" .. tabName
         tab.Size = UDim2.new(0, 90, 1, 0)
@@ -102,6 +118,12 @@ function CodexUI.Create(parentGui)
         local tabCorner = Instance.new("UICorner")
         tabCorner.CornerRadius = UDim.new(0, 6)
         tabCorner.Parent = tab
+
+        CodexUI._tabButtons[currentTabName] = tab
+
+        tab.MouseButton1Click:Connect(function()
+            CodexUI.SetActiveTab(currentTabName)
+        end)
     end
 
     -- 도감 그리드
@@ -128,26 +150,64 @@ function CodexUI.Create(parentGui)
     gridPadding.PaddingLeft = UDim.new(0, 8)
     gridPadding.Parent = scrollFrame
 
-    -- 세트 진행도 영역
-    local setArea = Instance.new("Frame")
-    setArea.Name = "SetArea"
-    setArea.Size = UDim2.new(1, -30, 0, 80)
-    setArea.Position = UDim2.new(0, 15, 0, 455)
-    setArea.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-    setArea.Visible = false
-    setArea.Parent = panel
+    -- 세트 리스트 (세트 탭에서 표시)
+    local setList = Instance.new("ScrollingFrame")
+    setList.Name = "SetList"
+    setList.Size = scrollFrame.Size
+    setList.Position = scrollFrame.Position
+    setList.BackgroundColor3 = scrollFrame.BackgroundColor3
+    setList.ScrollBarThickness = 4
+    setList.Visible = false
+    setList.Parent = panel
 
-    local setCorner = Instance.new("UICorner")
-    setCorner.CornerRadius = UDim.new(0, 8)
-    setCorner.Parent = setArea
+    local setListCorner = Instance.new("UICorner")
+    setListCorner.CornerRadius = UDim.new(0, 8)
+    setListCorner.Parent = setList
+
+    local setLayout = Instance.new("UIListLayout")
+    setLayout.Padding = UDim.new(0, 10)
+    setLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    setLayout.Parent = setList
+
+    local setPadding = Instance.new("UIPadding")
+    setPadding.PaddingTop = UDim.new(0, 10)
+    setPadding.PaddingLeft = UDim.new(0, 10)
+    setPadding.PaddingRight = UDim.new(0, 10)
+    setPadding.Parent = setList
 
     CodexUI.panel = panel
+    CodexUI._setList = setList
+
+    -- 초기 탭 스타일
+    CodexUI.SetActiveTab(CodexUI._activeTab)
     return panel
+end
+
+function CodexUI.SetActiveTab(tabName)
+    CodexUI._activeTab = tabName or "전체"
+    for name, btn in pairs(CodexUI._tabButtons) do
+        setTabButtonStyle(btn, name == CodexUI._activeTab)
+    end
+    CodexUI._render()
 end
 
 -- 도감 데이터로 UI 갱신
 function CodexUI.Refresh(codexData, setData, progressData)
     if not CodexUI.panel then return end
+
+    CodexUI._data.codex = codexData
+    CodexUI._data.sets = setData
+    CodexUI._data.progress = progressData
+
+    CodexUI._render()
+end
+
+function CodexUI._render()
+    if not CodexUI.panel then return end
+
+    local codexData = CodexUI._data.codex
+    local setData = CodexUI._data.sets
+    local progressData = CodexUI._data.progress
 
     -- 진행도 업데이트
     if progressData then
@@ -160,10 +220,49 @@ function CodexUI.Refresh(codexData, setData, progressData)
         end
     end
 
-    -- 그리드 갱신
     local grid = CodexUI.panel:FindFirstChild("CodexGrid")
-    if not grid then return end
+    local setList = CodexUI._setList
+    if not grid or not setList then return end
 
+    if CodexUI._activeTab == "세트" then
+        grid.Visible = false
+        setList.Visible = true
+
+        for _, child in ipairs(setList:GetChildren()) do
+            if child:IsA("Frame") then
+                child:Destroy()
+            end
+        end
+
+        local cards = {}
+        if setData then
+            for setId, info in pairs(setData) do
+                table.insert(cards, info)
+            end
+        end
+        table.sort(cards, function(a, b)
+            return (a.displayName or "") < (b.displayName or "")
+        end)
+
+        for i, info in ipairs(cards) do
+            local card = CodexUI._createSetCard(info, i)
+            card.Parent = setList
+        end
+
+        task.defer(function()
+            local layout = setList:FindFirstChildOfClass("UIListLayout")
+            if layout then
+                setList.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+            end
+        end)
+
+        return
+    end
+
+    grid.Visible = true
+    setList.Visible = false
+
+    -- 그리드 갱신
     for _, child in ipairs(grid:GetChildren()) do
         if child:IsA("Frame") then
             child:Destroy()
@@ -171,14 +270,37 @@ function CodexUI.Refresh(codexData, setData, progressData)
     end
 
     if codexData then
-        local index = 0
-        for templateId, info in pairs(codexData) do
-            index = index + 1
-            local card = CodexUI._createCodexCard(info, index)
+        local list = {}
+        for _, info in pairs(codexData) do
+            -- 탭 필터
+            if CodexUI._activeTab == "전체"
+                or (CodexUI._activeTab == "무기" and info.category == Constants.Category.Weapon)
+                or (CodexUI._activeTab == "펫" and info.category == Constants.Category.Pet)
+                or (CodexUI._activeTab == "코스튬" and info.category == Constants.Category.Costume) then
+                table.insert(list, info)
+            end
+        end
+
+        table.sort(list, function(a, b)
+            local aDiscovered = a.discovered and 1 or 0
+            local bDiscovered = b.discovered and 1 or 0
+            if aDiscovered ~= bDiscovered then
+                return aDiscovered > bDiscovered
+            end
+            local ao = (Constants.RarityInfo[a.rarity] and Constants.RarityInfo[a.rarity].order) or 999
+            local bo = (Constants.RarityInfo[b.rarity] and Constants.RarityInfo[b.rarity].order) or 999
+            if ao ~= bo then
+                return ao > bo -- 높은 희귀도 우선
+            end
+            return (a.name or "") < (b.name or "")
+        end)
+
+        for i, info in ipairs(list) do
+            local card = CodexUI._createCodexCard(info, i)
             card.Parent = grid
         end
 
-        local rows = math.ceil(index / 5)
+        local rows = math.ceil(#list / 5)
         grid.CanvasSize = UDim2.new(0, 0, 0, rows * 118 + 16)
     end
 end
@@ -252,6 +374,106 @@ function CodexUI._createCodexCard(info, index)
     rarityLabel.TextSize = 10
     rarityLabel.Font = Enum.Font.GothamBold
     rarityLabel.Parent = card
+
+    return card
+end
+
+function CodexUI._createSetCard(info, index)
+    local card = Instance.new("Frame")
+    card.Name = "Set_" .. index
+    card.Size = UDim2.new(1, 0, 0, 140)
+    card.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+    card.LayoutOrder = index
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = card
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1.5
+    stroke.Color = info.completed and Color3.fromRGB(50, 255, 120) or Color3.fromRGB(90, 90, 120)
+    stroke.Parent = card
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -20, 0, 24)
+    title.Position = UDim2.new(0, 10, 0, 8)
+    title.BackgroundTransparency = 1
+    title.Text = (info.displayName or "세트") .. (info.completed and " (완료)" or "")
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.TextSize = 16
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = card
+
+    local progress = Instance.new("TextLabel")
+    progress.Size = UDim2.new(0, 110, 0, 20)
+    progress.Position = UDim2.new(1, -120, 0, 10)
+    progress.BackgroundTransparency = 1
+    progress.Text = tostring(info.ownedCount or 0) .. "/" .. tostring(info.totalCount or 0)
+    progress.TextColor3 = Color3.fromRGB(200, 200, 200)
+    progress.TextSize = 14
+    progress.Font = Enum.Font.GothamBold
+    progress.TextXAlignment = Enum.TextXAlignment.Right
+    progress.Parent = card
+
+    local desc = Instance.new("TextLabel")
+    desc.Size = UDim2.new(1, -20, 0, 34)
+    desc.Position = UDim2.new(0, 10, 0, 34)
+    desc.BackgroundTransparency = 1
+    desc.Text = info.description or ""
+    desc.TextColor3 = Color3.fromRGB(170, 170, 170)
+    desc.TextSize = 12
+    desc.Font = Enum.Font.Gotham
+    desc.TextWrapped = true
+    desc.TextXAlignment = Enum.TextXAlignment.Left
+    desc.TextYAlignment = Enum.TextYAlignment.Top
+    desc.Parent = card
+
+    -- 구성 아이템 요약
+    local itemLines = {}
+    if info.items then
+        for _, it in ipairs(info.items) do
+            local template = ItemDatabase.GetTemplate(it.templateId)
+            local itemName = template and template.name or it.templateId
+            table.insert(itemLines, (it.owned and "✓ " or "• ") .. itemName)
+        end
+    end
+
+    local itemsLabel = Instance.new("TextLabel")
+    itemsLabel.Size = UDim2.new(1, -20, 0, 46)
+    itemsLabel.Position = UDim2.new(0, 10, 0, 72)
+    itemsLabel.BackgroundTransparency = 1
+    itemsLabel.Text = table.concat(itemLines, "\n")
+    itemsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    itemsLabel.TextSize = 12
+    itemsLabel.Font = Enum.Font.Gotham
+    itemsLabel.TextWrapped = true
+    itemsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    itemsLabel.TextYAlignment = Enum.TextYAlignment.Top
+    itemsLabel.Parent = card
+
+    -- 보상
+    local rewardText = ""
+    if info.rewards then
+        if info.rewards.coins then
+            rewardText = rewardText .. "+ " .. tostring(info.rewards.coins) .. " Coin"
+        end
+        if info.rewards.title then
+            if rewardText ~= "" then rewardText = rewardText .. "  " end
+            rewardText = rewardText .. "칭호: " .. tostring(info.rewards.title)
+        end
+    end
+
+    local rewardLabel = Instance.new("TextLabel")
+    rewardLabel.Size = UDim2.new(1, -20, 0, 18)
+    rewardLabel.Position = UDim2.new(0, 10, 1, -24)
+    rewardLabel.BackgroundTransparency = 1
+    rewardLabel.Text = rewardText
+    rewardLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+    rewardLabel.TextSize = 12
+    rewardLabel.Font = Enum.Font.GothamBold
+    rewardLabel.TextXAlignment = Enum.TextXAlignment.Left
+    rewardLabel.Parent = card
 
     return card
 end

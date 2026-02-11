@@ -22,7 +22,7 @@ local MinigameUI = require(script.MinigameUI)
 -------------------------------------------------------
 local function waitForRemote(name, className)
     className = className or "RemoteEvent"
-    return ReplicatedStorage:WaitForChild(name, 10)
+    return ReplicatedStorage:WaitForChild(name)  -- 타임아웃 제거 (서버가 생성하면 바로 나타남)
 end
 
 local remotes = {}
@@ -43,6 +43,41 @@ local gachaPanel = GachaUI.Create(mainGui)
 local inventoryPanel = InventoryUI.Create(mainGui)
 local codexPanel = CodexUI.Create(mainGui)
 local minigamePanel = MinigameUI.Create(mainGui)
+
+-------------------------------------------------------
+-- 인벤토리 장착/해제 액션 바인딩
+-------------------------------------------------------
+local inventoryActionBusy = false
+
+local function refreshInventory()
+    local data = remotes[Constants.Remotes.RequestInventory]:InvokeServer()
+    if data then
+        InventoryUI.Refresh(data.inventory, data.equipped, data.templates)
+    end
+end
+
+InventoryUI.BindActions({
+    onEquip = function(slotIndex)
+        if inventoryActionBusy then return end
+        inventoryActionBusy = true
+        remotes[Constants.Remotes.RequestEquip]:FireServer(slotIndex)
+        task.spawn(function()
+            task.wait(0.12)
+            refreshInventory()
+            inventoryActionBusy = false
+        end)
+    end,
+    onUnequip = function(category)
+        if inventoryActionBusy then return end
+        inventoryActionBusy = true
+        remotes[Constants.Remotes.RequestUnequip]:FireServer(category)
+        task.spawn(function()
+            task.wait(0.12)
+            refreshInventory()
+            inventoryActionBusy = false
+        end)
+    end,
+})
 
 -------------------------------------------------------
 -- 모든 패널 닫기 (하나만 열기 위해)
@@ -88,7 +123,7 @@ if menuBar then
                 InventoryUI.Show()
                 local data = remotes[Constants.Remotes.RequestInventory]:InvokeServer()
                 if data then
-                    InventoryUI.Refresh(data.inventory, data.equipped)
+                    InventoryUI.Refresh(data.inventory, data.equipped, data.templates)
                 end
             end
         end)
@@ -120,7 +155,7 @@ if menuBar then
 end
 
 -------------------------------------------------------
--- 가차 버튼 이벤트
+-- 가차 버튼 이벤트 + 로딩 연출
 -------------------------------------------------------
 local buttonArea = gachaPanel:FindFirstChild("ButtonArea")
 if buttonArea then
@@ -128,22 +163,79 @@ if buttonArea then
     local multiCoinBtn = buttonArea:FindFirstChild("MultiCoinBtn")
     local ticketBtn = buttonArea:FindFirstChild("TicketBtn")
     local oddsBtn = buttonArea:FindFirstChild("OddsBtn")
+    local gachaMachine = gachaPanel:FindFirstChild("MachineFrame")
+
+    -- 로딩 상태 추적
+    local isGachaInProgress = false
+
+    local function startGachaAnimation()
+        if isGachaInProgress then return end
+        isGachaInProgress = true
+
+        -- 버튼 비활성화
+        if singleCoinBtn then singleCoinBtn.Active = false end
+        if multiCoinBtn then multiCoinBtn.Active = false end
+        if ticketBtn then ticketBtn.Active = false end
+
+        -- 가차 머신 애니메이션 (회전 효과)
+        if gachaMachine then
+            local label = gachaMachine:FindFirstChild("TextLabel")
+            if label then
+                label.Text = "뽑는 중..."
+                local spin = 0
+                local connection
+                connection = game:GetService("RunService").Heartbeat:Connect(function()
+                    spin = spin + 10
+                    gachaMachine.Rotation = spin
+                end)
+
+                -- 애니메이션 정지 함수 반환
+                return function()
+                    connection:Disconnect()
+                    gachaMachine.Rotation = 0
+                    label.Text = "GACHA"
+                    isGachaInProgress = false
+                    if singleCoinBtn then singleCoinBtn.Active = true end
+                    if multiCoinBtn then multiCoinBtn.Active = true end
+                    if ticketBtn then ticketBtn.Active = true end
+                end
+            end
+        end
+
+        return function() end  -- 폴백
+    end
 
     if singleCoinBtn then
         singleCoinBtn.MouseButton1Click:Connect(function()
-            remotes[Constants.Remotes.RequestGachaPull]:FireServer({ pullType = "single_coin" })
+            local stopAnimation = startGachaAnimation()
+            remotes[Constants.Remotes.RequestGachaPull]:FireServer({
+                pullType = "single_coin",
+                requestTime = os.time()  -- 타임스탬프 추가
+            })
+            -- 결과는 OnClientEvent에서 처리되므로 여기서는 애니메이션만 설정
+            task.delay(10, stopAnimation)  -- 최대 10초 후 애니메이션 정지
         end)
     end
 
     if multiCoinBtn then
         multiCoinBtn.MouseButton1Click:Connect(function()
-            remotes[Constants.Remotes.RequestGachaPull]:FireServer({ pullType = "multi_coin" })
+            local stopAnimation = startGachaAnimation()
+            remotes[Constants.Remotes.RequestGachaPull]:FireServer({
+                pullType = "multi_coin",
+                requestTime = os.time()
+            })
+            task.delay(15, stopAnimation)  -- 10연은 최대 15초
         end)
     end
 
     if ticketBtn then
         ticketBtn.MouseButton1Click:Connect(function()
-            remotes[Constants.Remotes.RequestGachaPull]:FireServer({ pullType = "single_ticket" })
+            local stopAnimation = startGachaAnimation()
+            remotes[Constants.Remotes.RequestGachaPull]:FireServer({
+                pullType = "single_ticket",
+                requestTime = os.time()
+            })
+            task.delay(10, stopAnimation)
         end)
     end
 
@@ -192,7 +284,11 @@ end
 local mgJoinBtn = minigamePanel:FindFirstChild("JoinBtn")
 if mgJoinBtn then
     mgJoinBtn.MouseButton1Click:Connect(function()
-        remotes[Constants.Remotes.JoinMinigame]:FireServer("join")
+        if MinigameUI.joined then
+            remotes[Constants.Remotes.JoinMinigame]:FireServer("leave")
+        else
+            remotes[Constants.Remotes.JoinMinigame]:FireServer("join")
+        end
     end)
 end
 
@@ -230,7 +326,24 @@ remotes[Constants.Remotes.MinigameStateUpdate].OnClientEvent:Connect(function(da
     if data.type == "queue" then
         MinigameUI.UpdateQueue(data.data)
     elseif data.type == "queue_left" then
-        MinigameUI.UpdateQueue({ success = true, message = "" })
+        MinigameUI.SetJoined(false)
+        MinigameUI.SetStatus("")
+    elseif data.type == "session_start" then
+        MinigameUI.SetJoined(true)
+        local startIn = tonumber(data.startIn) or 3
+        MinigameUI.SetStatus("게임 시작! " .. tostring(startIn) .. "초 후 웨이브 시작")
+    elseif data.type == "wave_start" then
+        local wave = tonumber(data.wave) or 0
+        local enemyName = data.enemies and data.enemies.name or ""
+        MinigameUI.SetStatus("Wave " .. tostring(wave) .. " 시작! " .. tostring(enemyName))
+    elseif data.type == "wave_clear" then
+        local wave = tonumber(data.wave) or 0
+        MinigameUI.SetStatus("Wave " .. tostring(wave) .. " 클리어!")
+    elseif data.type == "player_left" then
+        MinigameUI.SetStatus("플레이어가 나갔습니다.")
+    elseif data.type == "session_end" then
+        MinigameUI.SetJoined(false)
+        MinigameUI.SetStatus("미니게임 종료")
     end
 end)
 
@@ -238,6 +351,7 @@ end)
 remotes[Constants.Remotes.MinigameResult].OnClientEvent:Connect(function(result)
     if result then
         MinigameUI.ShowResult(result)
+        MinigameUI.SetJoined(false)
         -- 재화 갱신
         local currency = remotes[Constants.Remotes.RequestCurrency]:InvokeServer()
         if currency then

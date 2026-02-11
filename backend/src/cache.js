@@ -1,6 +1,6 @@
 /**
  * 인메모리 캐시 (TTL 지원)
- * 키: "templateId:locale:theme" → 값: 생성된 텍스트 배열
+ * 키: "templateId:locale:theme:tone" → 값: 생성된 텍스트 배열
  *
  * 프로덕션에서는 Redis로 교체 권장
  */
@@ -13,12 +13,12 @@ class TextCache {
         this.cache = new Map();
     }
 
-    _makeKey(templateId, locale, theme) {
-        return `${templateId}:${locale || "ko"}:${theme || "default"}`;
+    _makeKey(templateId, locale, theme, tone) {
+        return `${templateId}:${locale || "ko"}:${theme || "default"}:${tone || "default"}`;
     }
 
-    get(templateId, locale, theme) {
-        const key = this._makeKey(templateId, locale, theme);
+    get(templateId, locale, theme, tone) {
+        const key = this._makeKey(templateId, locale, theme, tone);
         const entry = this.cache.get(key);
 
         if (!entry) return null;
@@ -33,8 +33,8 @@ class TextCache {
         return texts[Math.floor(Math.random() * texts.length)];
     }
 
-    set(templateId, locale, theme, textData) {
-        const key = this._makeKey(templateId, locale, theme);
+    set(templateId, locale, theme, tone, textData) {
+        const key = this._makeKey(templateId, locale, theme, tone);
         const entry = this.cache.get(key);
 
         if (entry && Date.now() - entry.createdAt <= this.ttl) {

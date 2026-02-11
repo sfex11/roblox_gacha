@@ -28,14 +28,23 @@ function verifySignature(req, res, next) {
     }
 
     // 서명 검증
-    const body = JSON.stringify(req.body) || "";
+    const body = typeof req.rawBody === "string" ? req.rawBody : JSON.stringify(req.body) || "";
     const payload = `${timestamp}:${body}`;
     const expected = crypto
         .createHmac("sha256", config.robloxSharedSecret)
         .update(payload)
         .digest("hex");
 
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    let sigBuf;
+    let expBuf;
+    try {
+        sigBuf = Buffer.from(String(signature), "hex");
+        expBuf = Buffer.from(String(expected), "hex");
+    } catch {
+        return res.status(401).json({ error: "invalid_signature" });
+    }
+
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
         return res.status(401).json({ error: "invalid_signature" });
     }
 
@@ -47,7 +56,13 @@ function verifySignature(req, res, next) {
  */
 function verifySimple(req, res, next) {
     const secret = req.headers["x-api-secret"];
-    if (secret !== config.robloxSharedSecret) {
+    if (typeof secret !== "string") {
+        return res.status(401).json({ error: "invalid_secret" });
+    }
+
+    const a = Buffer.from(secret);
+    const b = Buffer.from(config.robloxSharedSecret);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
         return res.status(401).json({ error: "invalid_secret" });
     }
     next();

@@ -106,24 +106,41 @@ function GachaService._executeSinglePull(userId, poolId)
         data.stats.totalPulls = (data.stats.totalPulls or 0) + 1
     end
 
-    -- LLM 텍스트 생성 (활성화 시)
+    -- LLM 텍스트 생성 (활성화 시 - 동기 요청)
     local itemName = template and template.name or "???"
     local itemDesc = template and template.description or ""
     local itemFlavor = template and template.flavorText or ""
+    local llmSource = "preset"
 
     if LLMClient.IsEnabled() and template then
-        local llmResult = LLMClient.RequestText(
+        print("[GachaService] LLM 활성화됨 - 동기 요청 시작:", templateId)
+        local startTime = os.time()
+
+        -- 동기 LLM 요청 (응답을 기다림)
+        local llmResult = LLMClient.RequestTextAsync(
             templateId,
             rarity,
             template.category,
             template.name,
             { tone = "default" }
         )
-        if llmResult and llmResult.success then
+
+        local elapsed = os.time() - startTime
+        print("[GachaService] LLM 응답 시간:", elapsed, "초")
+
+        if llmResult and llmResult.success and llmResult.source ~= "fallback" then
+            -- LLM 생성 성공 - 결과 사용
             itemName = llmResult.name or itemName
             itemDesc = llmResult.description or itemDesc
             itemFlavor = llmResult.flavorText or itemFlavor
+            llmSource = llmResult.source or "llm"
+            print("[GachaService] LLM 텍스트 생성 성공:", itemName, "-", llmSource)
+        else
+            -- LLM 실패 - 프리셋 사용
+            print("[GachaService] LLM 텍스트 생성 실패 - 프리셋 사용")
         end
+    else
+        print("[GachaService] LLM 비활성화 또는 템플릿 없음 - 프리셋 사용")
     end
 
     return {
@@ -135,6 +152,7 @@ function GachaService._executeSinglePull(userId, poolId)
         isNew = isNew and not isDuplicate,
         isDuplicate = isDuplicate,
         duplicateCoins = duplicateCoins,
+        llmSource = llmSource,  -- "preset", "llm", "cache" 등
     }
 end
 

@@ -13,6 +13,32 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 local MinigameUI = {}
 
+MinigameUI.joined = false
+
+function MinigameUI.SetStatus(text)
+    if not MinigameUI.panel then return end
+    local label = MinigameUI.panel:FindFirstChild("QueueLabel")
+    if label then
+        label.Text = text or ""
+    end
+end
+
+function MinigameUI.SetJoined(joined)
+    MinigameUI.joined = joined == true
+    if not MinigameUI.panel then return end
+
+    local joinBtn = MinigameUI.panel:FindFirstChild("JoinBtn")
+    if joinBtn then
+        if MinigameUI.joined then
+            joinBtn.Text = "나가기"
+            joinBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+        else
+            joinBtn.Text = "참가하기"
+            joinBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        end
+    end
+end
+
 function MinigameUI.Create(parentGui)
     local panel = Instance.new("Frame")
     panel.Name = "MinigamePanel"
@@ -134,14 +160,12 @@ end
 
 -- 대기열 상태 업데이트
 function MinigameUI.UpdateQueue(data)
-    if not MinigameUI.panel then return end
-    local label = MinigameUI.panel:FindFirstChild("QueueLabel")
-    if label and data then
-        if data.success then
-            label.Text = data.message or "대기 중..."
-        else
-            label.Text = data.error or ""
-        end
+    if not data then return end
+    if data.success then
+        MinigameUI.SetJoined(true)
+        MinigameUI.SetStatus(data.message or "대기 중...")
+    else
+        MinigameUI.SetStatus(data.error or "")
     end
 end
 

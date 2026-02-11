@@ -12,14 +12,20 @@
  * GET  /api/cache/stats   — 캐시 통계
  */
 
+// 환경 변수 로드 (먼저 실행)
+require("dotenv").config();
+
 const express = require("express");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const path = require("path");
 
 const config = require("./config");
-const { verifySimple } = require("./auth");
+const { verifySimple, verifySignature } = require("./auth");
 const { generateItemText, batchGenerate } = require("./llm");
 const cache = require("./cache");
+const modelingRouter = require("./routes/modeling");
+const studioMcpRouter = require("./routes/studioMcp");
 
 const app = express();
 
@@ -27,7 +33,21 @@ const app = express();
 app.use(helmet());
 
 // JSON 파싱
-app.use(express.json({ limit: "1mb" }));
+app.use(
+    express.json({
+        limit: "1mb",
+        verify: (req, _res, buf) => {
+            req.rawBody = buf.toString("utf8");
+        },
+    }),
+);
+
+// 정적 파일 제공 (FBX exports)
+// exports 디렉토리는 backend/exports (src 상위)
+app.use("/exports", express.static(path.join(__dirname, "..", "exports")));
+
+const authMiddleware =
+    config.authMode === "signature" ? verifySignature : verifySimple;
 
 // 레이트 리밋
 const limiter = rateLimit({
@@ -46,16 +66,31 @@ app.get("/api/health", (req, res) => {
         status: "ok",
         uptime: process.uptime(),
         cache: cache.stats(),
+        authMode: config.authMode,
     });
 });
 
+// (옵션) 확률표 프록시 — 현재 백엔드에는 가차 풀 정보가 없으므로 미구현
+app.get("/api/odds/:poolId", (_req, res) => {
+    res.status(501).json({ error: "not_implemented" });
+});
+
 // ─── 이하 인증 필요 ──────────────────────────────────
-app.use("/api/generate", verifySimple);
-app.use("/api/batch", verifySimple);
-app.use("/api/cache", verifySimple);
+app.use("/api/generate", authMiddleware);
+app.use("/api/batch", authMiddleware);
+app.use("/api/cache", authMiddleware);
+app.use("/api/modeling", authMiddleware);
+
+// ─── Modeling API (3D 모델링 가이드 생성) ───────────────────
+app.use("/api/modeling", modelingRouter);
+
+// ─── Studio MCP API (Roblox Studio 통신) ─────────────────────
+app.use("/api/studio-mcp", studioMcpRouter);
 
 // ─── 단일 아이템 텍스트 생성 ─────────────────────────
 app.post("/api/generate", async (req, res) => {
+    console.log("[gacha-backend] /api/generate 요청 수신:", req.body.templateId);
+
     const {
         requestId,
         templateId,
@@ -70,12 +105,14 @@ app.post("/api/generate", async (req, res) => {
 
     // 필수 파라미터 검증
     if (!templateId || !rarity || !category || !baseName) {
+        console.log("[gacha-backend] 필수 파라미터 누락");
         return res.status(400).json({
             error: "missing_params",
             required: ["templateId", "rarity", "category", "baseName"],
         });
     }
 
+    console.log("[gacha-backend] LLM 생성 시작:", templateId);
     const result = await generateItemText({
         templateId,
         rarity,
@@ -86,6 +123,8 @@ app.post("/api/generate", async (req, res) => {
         keywords,
         tone,
     });
+
+    console.log("[gacha-backend] LLM 생성 결과:", result.success ? "성공" : "실패", "source:", result.source);
 
     if (result.success) {
         res.json({
@@ -127,17 +166,25 @@ app.get("/api/cache/stats", (req, res) => {
 });
 
 // ─── 캐시 정리 ───────────────────────────────────────
-app.post("/api/cache/cleanup", verifySimple, (req, res) => {
+app.post("/api/cache/cleanup", authMiddleware, (req, res) => {
     cache.cleanup();
     res.json({ success: true, stats: cache.stats() });
 });
 
 // ─── 서버 시작 ───────────────────────────────────────
-app.listen(config.port, () => {
+app.listen(config.port, "127.0.0.1", () => {
+    const modelName = config.llm.provider === "glm"
+        ? config.llm.glmModel
+        : config.llm.anthropicModel;
+    const apiKeySet = config.llm.provider === "glm"
+        ? config.zaiApiKey
+        : config.anthropicApiKey;
+
     console.log(`[gacha-backend] 서버 시작: http://localhost:${config.port}`);
-    console.log(`[gacha-backend] 모델: ${config.llm.model}`);
+    console.log(`[gacha-backend] 모델: ${modelName}`);
+    console.log(`[gacha-backend] 제공자: ${config.llm.provider.toUpperCase()}`);
     console.log(
-        `[gacha-backend] API 키: ${config.anthropicApiKey ? "설정됨" : "미설정"}`,
+        `[gacha-backend] API 키: ${apiKeySet ? "설정됨" : "미설정"}`,
     );
 });
 

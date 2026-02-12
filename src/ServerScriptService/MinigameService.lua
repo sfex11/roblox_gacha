@@ -4,13 +4,15 @@
 ]]
 
 local Players = game:GetService("Players")
-local Constants = require(game.ReplicatedStorage.Modules.Constants)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Constants = require(ReplicatedStorage.Modules.Constants)
 local CurrencyService = require(script.Parent.CurrencyService)
 local InventoryService = require(script.Parent.InventoryService)
 
 local MinigameService = {}
 
--- init.server.lua에서 주입되는 RemoteEvent 참조
+-- GachaServer에서 주입되는 RemoteEvent 참조
 local remoteStateUpdate = nil
 local remoteResult = nil
 

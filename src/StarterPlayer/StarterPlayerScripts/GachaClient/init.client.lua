@@ -18,25 +18,7 @@ local CodexUI = require(script.CodexUI)
 local MinigameUI = require(script.MinigameUI)
 
 -------------------------------------------------------
--- Remote 참조 대기
--------------------------------------------------------
-local function waitForRemote(name, className)
-    className = className or "RemoteEvent"
-    return ReplicatedStorage:WaitForChild(name)  -- 타임아웃 제거 (서버가 생성하면 바로 나타남)
-end
-
-local remotes = {}
-for name, _ in pairs(Constants.Remotes) do
-    if name == "RequestOddsTable" or name == "RequestInventory"
-        or name == "RequestCodex" or name == "RequestCurrency" then
-        remotes[name] = waitForRemote(name, "RemoteFunction")
-    else
-        remotes[name] = waitForRemote(name)
-    end
-end
-
--------------------------------------------------------
--- UI 생성
+-- UI 생성 (Remote 로딩과 무관하게 즉시 표시)
 -------------------------------------------------------
 local mainGui = HubUI.CreateMainGui()
 local gachaPanel = GachaUI.Create(mainGui)
@@ -45,12 +27,237 @@ local codexPanel = CodexUI.Create(mainGui)
 local minigamePanel = MinigameUI.Create(mainGui)
 
 -------------------------------------------------------
+-- Remote 초기화 (비동기/안전)
+-------------------------------------------------------
+local remotes = {}
+local remoteConnections = {}
+
+local REMOTE_FUNCTIONS = {
+    RequestOddsTable = true,
+    RequestInventory = true,
+    RequestCodex = true,
+    RequestCurrency = true,
+}
+
+local function findRemote(name)
+    local remote = ReplicatedStorage:FindFirstChild(name)
+    if remote then
+        return remote
+    end
+
+    -- 폴더에 모아두는 프로젝트(예: ReplicatedStorage/Remotes)도 지원
+    local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+    if remotesFolder then
+        return remotesFolder:FindFirstChild(name)
+    end
+
+    return nil
+end
+
+local function resolveRemote(name)
+    if remotes[name] then
+        return remotes[name]
+    end
+
+    local remote = findRemote(name)
+    if remote then
+        remotes[name] = remote
+        return remote
+    end
+
+    return nil
+end
+
+local function safeInvoke(remoteName, ...)
+    local remote = resolveRemote(remoteName)
+    if not remote then
+        warn("[MainClient] Remote 없음(Invoke): " .. tostring(remoteName))
+        return nil
+    end
+    if not remote:IsA("RemoteFunction") then
+        warn(string.format("[MainClient] RemoteFunction 아님(Invoke): %s (%s)", tostring(remoteName), remote.ClassName))
+        return nil
+    end
+
+    local ok, result = pcall(remote.InvokeServer, remote, ...)
+    if not ok then
+        warn(string.format("[MainClient] InvokeServer 실패: %s (%s)", tostring(remoteName), tostring(result)))
+        return nil
+    end
+    return result
+end
+
+local function safeFire(remoteName, ...)
+    local remote = resolveRemote(remoteName)
+    if not remote then
+        warn("[MainClient] Remote 없음(Fire): " .. tostring(remoteName))
+        return false
+    end
+    if not remote:IsA("RemoteEvent") then
+        warn(string.format("[MainClient] RemoteEvent 아님(Fire): %s (%s)", tostring(remoteName), remote.ClassName))
+        return false
+    end
+
+    local ok, err = pcall(remote.FireServer, remote, ...)
+    if not ok then
+        warn(string.format("[MainClient] FireServer 실패: %s (%s)", tostring(remoteName), tostring(err)))
+        return false
+    end
+    return true
+end
+
+local function tryConnectRemoteEvent(remoteName, handler)
+    if remoteConnections[remoteName] then
+        return true
+    end
+
+    local remote = resolveRemote(remoteName)
+    if not remote then
+        return false
+    end
+    if not remote:IsA("RemoteEvent") then
+        warn(string.format("[MainClient] RemoteEvent 아님(Connect): %s (%s)", tostring(remoteName), remote.ClassName))
+        return false
+    end
+
+    remoteConnections[remoteName] = remote.OnClientEvent:Connect(handler)
+    return true
+end
+
+local function tryConnectServerEvents()
+    tryConnectRemoteEvent(Constants.Remotes.GachaPullResult, function(result)
+        if not result then return end
+
+        if result.success then
+            GachaUI.ShowResult(result.items)
+            -- 재화 업데이트
+            if result.currency then
+                GachaUI.UpdateCurrency(result.currency.Coins or 0, result.currency.Tickets or 0)
+                HubUI.UpdateCurrency(result.currency)
+            end
+            -- 세트 완성 알림
+            if result.claimedSets and #result.claimedSets > 0 then
+                for _, set in ipairs(result.claimedSets) do
+                    -- 간단한 알림 (추후 연출 강화)
+                    print("[세트 완성!] " .. set.displayName)
+                end
+            end
+        else
+            warn(result.error or "가차 실패")
+        end
+    end)
+
+    tryConnectRemoteEvent(Constants.Remotes.MinigameStateUpdate, function(data)
+        if not data then return end
+
+        if data.type == "queue" then
+            MinigameUI.UpdateQueue(data.data)
+        elseif data.type == "queue_left" then
+            MinigameUI.SetJoined(false)
+            MinigameUI.SetStatus("")
+        elseif data.type == "session_start" then
+            MinigameUI.SetJoined(true)
+            local startIn = tonumber(data.startIn) or 3
+            MinigameUI.SetStatus("게임 시작! " .. tostring(startIn) .. "초 후 웨이브 시작")
+        elseif data.type == "wave_start" then
+            local wave = tonumber(data.wave) or 0
+            local enemyName = data.enemies and data.enemies.name or ""
+            MinigameUI.SetStatus("Wave " .. tostring(wave) .. " 시작! " .. tostring(enemyName))
+        elseif data.type == "wave_clear" then
+            local wave = tonumber(data.wave) or 0
+            MinigameUI.SetStatus("Wave " .. tostring(wave) .. " 클리어!")
+        elseif data.type == "player_left" then
+            MinigameUI.SetStatus("플레이어가 나갔습니다.")
+        elseif data.type == "session_end" then
+            MinigameUI.SetJoined(false)
+            MinigameUI.SetStatus("미니게임 종료")
+        end
+    end)
+
+    tryConnectRemoteEvent(Constants.Remotes.MinigameResult, function(result)
+        if result then
+            MinigameUI.ShowResult(result)
+            MinigameUI.SetJoined(false)
+            -- 재화 갱신
+            local currency = safeInvoke(Constants.Remotes.RequestCurrency)
+            if currency then
+                HubUI.UpdateCurrency(currency)
+            end
+        end
+    end)
+
+    tryConnectRemoteEvent(Constants.Remotes.PlayerDataLoaded, function(data)
+        print("[MainClient] PlayerDataLoaded 수신:", data)
+        if data and data.currency then
+            print("[MainClient] 재화 업데이트:", data.currency.Coins, data.currency.Tickets)
+            HubUI.UpdateCurrency(data.currency)
+        else
+            warn("[MainClient] PlayerDataLoaded에 currency가 없음:", data)
+        end
+    end)
+end
+
+-- 1차: 즉시 스캔 (UI 블로킹 없음)
+do
+    local missing = {}
+    for name, _ in pairs(Constants.Remotes) do
+        local expectedClass = REMOTE_FUNCTIONS[name] and "RemoteFunction" or "RemoteEvent"
+        local remote = resolveRemote(name)
+
+        if not remote then
+            table.insert(missing, name)
+        elseif remote.ClassName ~= expectedClass then
+            warn(string.format("[MainClient] Remote 타입 불일치: %s (expected=%s actual=%s)", name, expectedClass, remote.ClassName))
+        end
+    end
+
+    if #missing > 0 then
+        warn("[MainClient] Remote 일부 없음(초기): " .. table.concat(missing, ", "))
+    end
+end
+
+-- 2차: 일정 시간 재시도 (서버 초기화 지연 대비)
+task.spawn(function()
+    local startTime = os.clock()
+    local maxWait = 60
+
+    while os.clock() - startTime < maxWait do
+        local missingCount = 0
+        for name, _ in pairs(Constants.Remotes) do
+            if not remotes[name] then
+                missingCount = missingCount + 1
+                resolveRemote(name)
+            end
+        end
+
+        tryConnectServerEvents()
+
+        if missingCount == 0 then
+            print("[MainClient] 모든 Remote 로드 완료")
+            return
+        end
+
+        task.wait(0.5)
+    end
+
+    -- 최종 누락 로그
+    local missing = {}
+    for name, _ in pairs(Constants.Remotes) do
+        if not remotes[name] then
+            table.insert(missing, name)
+        end
+    end
+
+    warn("[MainClient] Remote 로드 타임아웃(" .. tostring(maxWait) .. "s). 누락: " .. table.concat(missing, ", "))
+end)
+
+-------------------------------------------------------
 -- 인벤토리 장착/해제 액션 바인딩
 -------------------------------------------------------
 local inventoryActionBusy = false
 
 local function refreshInventory()
-    local data = remotes[Constants.Remotes.RequestInventory]:InvokeServer()
+    local data = safeInvoke(Constants.Remotes.RequestInventory)
     if data then
         InventoryUI.Refresh(data.inventory, data.equipped, data.templates)
     end
@@ -60,7 +267,7 @@ InventoryUI.BindActions({
     onEquip = function(slotIndex)
         if inventoryActionBusy then return end
         inventoryActionBusy = true
-        remotes[Constants.Remotes.RequestEquip]:FireServer(slotIndex)
+        safeFire(Constants.Remotes.RequestEquip, slotIndex)
         task.spawn(function()
             task.wait(0.12)
             refreshInventory()
@@ -70,7 +277,7 @@ InventoryUI.BindActions({
     onUnequip = function(category)
         if inventoryActionBusy then return end
         inventoryActionBusy = true
-        remotes[Constants.Remotes.RequestUnequip]:FireServer(category)
+        safeFire(Constants.Remotes.RequestUnequip, category)
         task.spawn(function()
             task.wait(0.12)
             refreshInventory()
@@ -106,7 +313,7 @@ if menuBar then
             if not wasVisible then
                 GachaUI.Show()
                 -- 재화 갱신
-                local currency = remotes[Constants.Remotes.RequestCurrency]:InvokeServer()
+                local currency = safeInvoke(Constants.Remotes.RequestCurrency)
                 if currency then
                     GachaUI.UpdateCurrency(currency.Coins or 0, currency.Tickets or 0)
                     HubUI.UpdateCurrency(currency)
@@ -121,7 +328,7 @@ if menuBar then
             closeAllPanels()
             if not wasVisible then
                 InventoryUI.Show()
-                local data = remotes[Constants.Remotes.RequestInventory]:InvokeServer()
+                local data = safeInvoke(Constants.Remotes.RequestInventory)
                 if data then
                     InventoryUI.Refresh(data.inventory, data.equipped, data.templates)
                 end
@@ -135,7 +342,7 @@ if menuBar then
             closeAllPanels()
             if not wasVisible then
                 CodexUI.Show()
-                local data = remotes[Constants.Remotes.RequestCodex]:InvokeServer()
+                local data = safeInvoke(Constants.Remotes.RequestCodex)
                 if data then
                     CodexUI.Refresh(data.codex, data.sets, data.progress)
                 end
@@ -169,7 +376,9 @@ if buttonArea then
     local isGachaInProgress = false
 
     local function startGachaAnimation()
-        if isGachaInProgress then return end
+        if isGachaInProgress then
+            return function() end
+        end
         isGachaInProgress = true
 
         -- 버튼 비활성화
@@ -208,40 +417,52 @@ if buttonArea then
     if singleCoinBtn then
         singleCoinBtn.MouseButton1Click:Connect(function()
             local stopAnimation = startGachaAnimation()
-            remotes[Constants.Remotes.RequestGachaPull]:FireServer({
+            local ok = safeFire(Constants.Remotes.RequestGachaPull, {
                 pullType = "single_coin",
                 requestTime = os.time()  -- 타임스탬프 추가
             })
             -- 결과는 OnClientEvent에서 처리되므로 여기서는 애니메이션만 설정
-            task.delay(10, stopAnimation)  -- 최대 10초 후 애니메이션 정지
+            if ok then
+                task.delay(10, stopAnimation)  -- 최대 10초 후 애니메이션 정지
+            else
+                stopAnimation()
+            end
         end)
     end
 
     if multiCoinBtn then
         multiCoinBtn.MouseButton1Click:Connect(function()
             local stopAnimation = startGachaAnimation()
-            remotes[Constants.Remotes.RequestGachaPull]:FireServer({
+            local ok = safeFire(Constants.Remotes.RequestGachaPull, {
                 pullType = "multi_coin",
                 requestTime = os.time()
             })
-            task.delay(15, stopAnimation)  -- 10연은 최대 15초
+            if ok then
+                task.delay(15, stopAnimation)  -- 10연은 최대 15초
+            else
+                stopAnimation()
+            end
         end)
     end
 
     if ticketBtn then
         ticketBtn.MouseButton1Click:Connect(function()
             local stopAnimation = startGachaAnimation()
-            remotes[Constants.Remotes.RequestGachaPull]:FireServer({
+            local ok = safeFire(Constants.Remotes.RequestGachaPull, {
                 pullType = "single_ticket",
                 requestTime = os.time()
             })
-            task.delay(10, stopAnimation)
+            if ok then
+                task.delay(10, stopAnimation)
+            else
+                stopAnimation()
+            end
         end)
     end
 
     if oddsBtn then
         oddsBtn.MouseButton1Click:Connect(function()
-            local odds = remotes[Constants.Remotes.RequestOddsTable]:InvokeServer("standard_v1")
+            local odds = safeInvoke(Constants.Remotes.RequestOddsTable, "standard_v1")
             if odds then
                 GachaUI.ShowOddsTable(odds)
             end
@@ -285,9 +506,9 @@ local mgJoinBtn = minigamePanel:FindFirstChild("JoinBtn")
 if mgJoinBtn then
     mgJoinBtn.MouseButton1Click:Connect(function()
         if MinigameUI.joined then
-            remotes[Constants.Remotes.JoinMinigame]:FireServer("leave")
+            safeFire(Constants.Remotes.JoinMinigame, "leave")
         else
-            remotes[Constants.Remotes.JoinMinigame]:FireServer("join")
+            safeFire(Constants.Remotes.JoinMinigame, "join")
         end
     end)
 end
@@ -295,76 +516,29 @@ end
 -------------------------------------------------------
 -- 서버 이벤트 수신
 -------------------------------------------------------
+tryConnectServerEvents()
 
--- 가차 결과
-remotes[Constants.Remotes.GachaPullResult].OnClientEvent:Connect(function(result)
-    if not result then return end
+-------------------------------------------------------
+-- 관리자 모드 설정 (UGC 생성 버튼 표시)
+-------------------------------------------------------
+local RunService = game:GetService("RunService")
 
-    if result.success then
-        GachaUI.ShowResult(result.items)
-        -- 재화 업데이트
-        if result.currency then
-            GachaUI.UpdateCurrency(result.currency.Coins or 0, result.currency.Tickets or 0)
-            HubUI.UpdateCurrency(result.currency)
-        end
-        -- 세트 완성 알림
-        if result.claimedSets and #result.claimedSets > 0 then
-            for _, set in ipairs(result.claimedSets) do
-                -- 간단한 알림 (추후 연출 강화)
-                print("[세트 완성!] " .. set.displayName)
-            end
-        end
+local function checkAdminMode()
+    if Constants.IsAdmin(player, RunService) then
+        GachaUI.SetAdminMode(true)
+        print("[MainClient] 관리자 모드 활성화 - UGC 생성 버튼 표시")
     else
-        warn(result.error or "가차 실패")
+        GachaUI.SetAdminMode(false)
     end
-end)
+end
 
--- 미니게임 상태
-remotes[Constants.Remotes.MinigameStateUpdate].OnClientEvent:Connect(function(data)
-    if not data then return end
-
-    if data.type == "queue" then
-        MinigameUI.UpdateQueue(data.data)
-    elseif data.type == "queue_left" then
-        MinigameUI.SetJoined(false)
-        MinigameUI.SetStatus("")
-    elseif data.type == "session_start" then
-        MinigameUI.SetJoined(true)
-        local startIn = tonumber(data.startIn) or 3
-        MinigameUI.SetStatus("게임 시작! " .. tostring(startIn) .. "초 후 웨이브 시작")
-    elseif data.type == "wave_start" then
-        local wave = tonumber(data.wave) or 0
-        local enemyName = data.enemies and data.enemies.name or ""
-        MinigameUI.SetStatus("Wave " .. tostring(wave) .. " 시작! " .. tostring(enemyName))
-    elseif data.type == "wave_clear" then
-        local wave = tonumber(data.wave) or 0
-        MinigameUI.SetStatus("Wave " .. tostring(wave) .. " 클리어!")
-    elseif data.type == "player_left" then
-        MinigameUI.SetStatus("플레이어가 나갔습니다.")
-    elseif data.type == "session_end" then
-        MinigameUI.SetJoined(false)
-        MinigameUI.SetStatus("미니게임 종료")
-    end
-end)
-
--- 미니게임 결과
-remotes[Constants.Remotes.MinigameResult].OnClientEvent:Connect(function(result)
-    if result then
-        MinigameUI.ShowResult(result)
-        MinigameUI.SetJoined(false)
-        -- 재화 갱신
-        local currency = remotes[Constants.Remotes.RequestCurrency]:InvokeServer()
-        if currency then
-            HubUI.UpdateCurrency(currency)
-        end
-    end
-end)
-
--- 플레이어 데이터 로드 완료
-remotes[Constants.Remotes.PlayerDataLoaded].OnClientEvent:Connect(function(data)
-    if data and data.currency then
-        HubUI.UpdateCurrency(data.currency)
-    end
-end)
+-- 플레이어 캐릭터 로드 후 확인 (캐릭터가 로드된 시점에 확인)
+if player.Character then
+    checkAdminMode()
+else
+    player.CharacterAdded:Connect(function()
+        checkAdminMode()
+    end)
+end
 
 print("[MainClient] 가차 게임 클라이언트 초기화 완료")

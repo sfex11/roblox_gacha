@@ -140,6 +140,27 @@ function GachaUI.Create(parentGui)
     currencyInfo.Font = Enum.Font.Gotham
     currencyInfo.Parent = panel
 
+    -- UGC 생성 버튼 (관리자 전용)
+    local ugcCreateBtn = Instance.new("TextButton")
+    ugcCreateBtn.Name = "UGCCreateBtn"
+    ugcCreateBtn.Size = UDim2.new(0, 140, 0, 35)
+    ugcCreateBtn.Position = UDim2.new(1, -155, 1, -50)
+    ugcCreateBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
+    ugcCreateBtn.Text = "✨ UGC 생성"
+    ugcCreateBtn.TextColor3 = Color3.new(1, 1, 1)
+    ugcCreateBtn.TextSize = 12
+    ugcCreateBtn.Font = Enum.Font.GothamBold
+    ugcCreateBtn.Visible = false  -- 관리자만 표시
+    ugcCreateBtn.Parent = panel
+
+    local ugcBtnCorner = Instance.new("UICorner")
+    ugcBtnCorner.CornerRadius = UDim.new(0, 8)
+    ugcBtnCorner.Parent = ugcCreateBtn
+
+    ugcCreateBtn.MouseButton1Click:Connect(function()
+        GachaUI.ShowUGCCreatePopup()
+    end)
+
     GachaUI.panel = panel
     return panel
 end
@@ -478,6 +499,304 @@ function GachaUI.ShowOddsTable(oddsData)
     closeBtn.MouseButton1Click:Connect(function()
         screenGui:Destroy()
     end)
+end
+
+-------------------------------------------------------
+-- UGC 생성 팝업 (관리자 전용)
+-------------------------------------------------------
+function GachaUI.ShowUGCCreatePopup()
+    local existing = playerGui:FindFirstChild("UGCCreatePopup")
+    if existing then existing:Destroy() end
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "UGCCreatePopup"
+    screenGui.DisplayOrder = 100
+    screenGui.Parent = playerGui
+
+    -- 배경 오버레이
+    local overlay = Instance.new("TextButton")
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+    overlay.BackgroundTransparency = 0.6
+    overlay.ZIndex = 1
+    overlay.Text = ""
+    overlay.AutoButtonColor = false
+    overlay.Parent = screenGui
+
+    -- 팝업 패널
+    local panel = Instance.new("Frame")
+    panel.Size = UDim2.new(0, 400, 0, 380)
+    panel.Position = UDim2.new(0.5, -200, 0.5, -190)
+    panel.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    panel.ZIndex = 2
+    panel.Parent = screenGui
+
+    local panelCorner = Instance.new("UICorner")
+    panelCorner.CornerRadius = UDim.new(0, 16)
+    panelCorner.Parent = panel
+
+    -- 제목
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.BackgroundTransparency = 1
+    title.Text = "✨ AI UGC 생성"
+    title.TextColor3 = Color3.fromRGB(150, 130, 255)
+    title.TextSize = 22
+    title.Font = Enum.Font.GothamBold
+    title.Parent = panel
+
+    -- 프롬프트 입력
+    local promptLabel = Instance.new("TextLabel")
+    promptLabel.Size = UDim2.new(1, -40, 0, 20)
+    promptLabel.Position = UDim2.new(0, 20, 0, 60)
+    promptLabel.BackgroundTransparency = 1
+    promptLabel.Text = "프롬프트 (예: 귀여운 고양이 귀)"
+    promptLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    promptLabel.TextSize = 13
+    promptLabel.Font = Enum.Font.Gotham
+    promptLabel.TextXAlignment = Enum.TextXAlignment.Left
+    promptLabel.Parent = panel
+
+    local promptInput = Instance.new("TextBox")
+    promptInput.Name = "PromptInput"
+    promptInput.Size = UDim2.new(1, -40, 0, 40)
+    promptInput.Position = UDim2.new(0, 20, 0, 85)
+    promptInput.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    promptInput.Text = ""
+    promptInput.PlaceholderText = "원하는 아이템을 설명하세요..."
+    promptInput.TextColor3 = Color3.new(1, 1, 1)
+    promptInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 140)
+    promptInput.TextSize = 14
+    promptInput.Font = Enum.Font.Gotham
+    promptInput.ClearTextOnFocus = false
+    promptInput.Parent = panel
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 8)
+    inputCorner.Parent = promptInput
+
+    -- 카테고리 선택
+    local categoryLabel = Instance.new("TextLabel")
+    categoryLabel.Size = UDim2.new(1, -40, 0, 20)
+    categoryLabel.Position = UDim2.new(0, 20, 0, 135)
+    categoryLabel.BackgroundTransparency = 1
+    categoryLabel.Text = "카테고리"
+    categoryLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    categoryLabel.TextSize = 13
+    categoryLabel.Font = Enum.Font.Gotham
+    categoryLabel.TextXAlignment = Enum.TextXAlignment.Left
+    categoryLabel.Parent = panel
+
+    local categoryFrame = Instance.new("Frame")
+    categoryFrame.Name = "CategoryFrame"
+    categoryFrame.Size = UDim2.new(1, -40, 0, 35)
+    categoryFrame.Position = UDim2.new(0, 20, 0, 160)
+    categoryFrame.BackgroundTransparency = 1
+    categoryFrame.Parent = panel
+
+    local categoryLayout = Instance.new("UIListLayout")
+    categoryLayout.FillDirection = Enum.FillDirection.Horizontal
+    categoryLayout.Padding = UDim.new(0, 8)
+    categoryLayout.Parent = categoryFrame
+
+    local categories = {"Hat", "Hair", "Back", "Face"}
+    local selectedCategory = "Hat"
+
+    for _, cat in ipairs(categories) do
+        local btn = Instance.new("TextButton")
+        btn.Name = "Category_" .. cat
+        btn.Size = UDim2.new(0, 75, 0, 30)
+        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+        btn.Text = cat
+        btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+        btn.TextSize = 11
+        btn.Font = Enum.Font.Gotham
+        btn.Parent = categoryFrame
+
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = btn
+
+        btn.MouseButton1Click:Connect(function()
+            selectedCategory = cat
+            -- 모든 버튼 스타일 리셋
+            for _, child in ipairs(categoryFrame:GetChildren()) do
+                if child:IsA("TextButton") then
+                    child.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+                    child.TextColor3 = Color3.fromRGB(180, 180, 180)
+                end
+            end
+            -- 선택된 버튼 스타일
+            btn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
+            btn.TextColor3 = Color3.new(1, 1, 1)
+        end)
+
+        -- 기본 선택
+        if cat == selectedCategory then
+            btn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
+            btn.TextColor3 = Color3.new(1, 1, 1)
+        end
+    end
+
+    -- 희귀도 선택
+    local rarityLabel = Instance.new("TextLabel")
+    rarityLabel.Size = UDim2.new(1, -40, 0, 20)
+    rarityLabel.Position = UDim2.new(0, 20, 0, 205)
+    rarityLabel.BackgroundTransparency = 1
+    rarityLabel.Text = "희귀도"
+    rarityLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    rarityLabel.TextSize = 13
+    rarityLabel.Font = Enum.Font.Gotham
+    rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+    rarityLabel.Parent = panel
+
+    local rarityFrame = Instance.new("Frame")
+    rarityFrame.Name = "RarityFrame"
+    rarityFrame.Size = UDim2.new(1, -40, 0, 35)
+    rarityFrame.Position = UDim2.new(0, 20, 0, 230)
+    rarityFrame.BackgroundTransparency = 1
+    rarityFrame.Parent = panel
+
+    local rarityLayout = Instance.new("UIListLayout")
+    rarityLayout.FillDirection = Enum.FillDirection.Horizontal
+    rarityLayout.Padding = UDim.new(0, 6)
+    rarityLayout.Parent = rarityFrame
+
+    local rarities = {"Rare", "Epic", "Legendary", "Mythic"}
+    local rarityColors = {
+        Rare = Color3.fromRGB(70, 130, 255),
+        Epic = Color3.fromRGB(170, 70, 255),
+        Legendary = Color3.fromRGB(255, 200, 50),
+        Mythic = Color3.fromRGB(255, 80, 120),
+    }
+    local selectedRarity = "Rare"
+
+    for _, r in ipairs(rarities) do
+        local btn = Instance.new("TextButton")
+        btn.Name = "Rarity_" .. r
+        btn.Size = UDim2.new(0, 80, 0, 30)
+        btn.BackgroundColor3 = rarityColors[r]
+        btn.Text = r
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.TextSize = 10
+        btn.Font = Enum.Font.GothamBold
+        btn.Parent = rarityFrame
+
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = btn
+
+        btn.MouseButton1Click:Connect(function()
+            selectedRarity = r
+        end)
+    end
+
+    -- 생성 버튼
+    local createBtn = Instance.new("TextButton")
+    createBtn.Name = "CreateBtn"
+    createBtn.Size = UDim2.new(1, -80, 0, 45)
+    createBtn.Position = UDim2.new(0, 40, 0, 285)
+    createBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
+    createBtn.Text = "✨ UGC 생성하기"
+    createBtn.TextColor3 = Color3.new(1, 1, 1)
+    createBtn.TextSize = 16
+    createBtn.Font = Enum.Font.GothamBold
+    createBtn.Parent = panel
+
+    local createBtnCorner = Instance.new("UICorner")
+    createBtnCorner.CornerRadius = UDim.new(0, 8)
+    createBtnCorner.Parent = createBtn
+
+    -- 취소 버튼
+    local cancelBtn = Instance.new("TextButton")
+    cancelBtn.Name = "CancelBtn"
+    cancelBtn.Size = UDim2.new(1, -80, 0, 35)
+    cancelBtn.Position = UDim2.new(0, 40, 0, 335)
+    cancelBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+    cancelBtn.Text = "취소"
+    cancelBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    cancelBtn.TextSize = 13
+    cancelBtn.Font = Enum.Font.Gotham
+    cancelBtn.Parent = panel
+
+    local cancelBtnCorner = Instance.new("UICorner")
+    cancelBtnCorner.CornerRadius = UDim.new(0, 6)
+    cancelBtnCorner.Parent = cancelBtn
+
+    -- 상태 메시지
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Name = "StatusLabel"
+    statusLabel.Size = UDim2.new(1, 0, 0, 20)
+    statusLabel.Position = UDim2.new(0, 0, 0, 265)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = ""
+    statusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
+    statusLabel.TextSize = 12
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.Parent = panel
+
+    -- 닫기 함수
+    local function closePopup()
+        screenGui:Destroy()
+    end
+
+    -- 생성 처리
+    createBtn.MouseButton1Click:Connect(function()
+        local prompt = promptInput.Text
+        if prompt == "" or prompt == "원하는 아이템을 설명하세요..." then
+            statusLabel.Text = "⚠️ 프롬프트를 입력해주세요"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
+            return
+        end
+
+        createBtn.Text = "⏳ 생성 중..."
+        createBtn.Active = false
+        statusLabel.Text = "🔄 AI가 아이템을 생성하고 있어요..."
+        statusLabel.TextColor3 = Color3.fromRGB(150, 150, 200)
+
+        -- RemoteFunction으로 서버에 생성 요청
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local ugcCreateFunc = ReplicatedStorage:FindFirstChild("UGCCreateItem")
+
+        if ugcCreateFunc then
+            local success, result = pcall(function()
+                return ugcCreateFunc:InvokeServer(prompt, selectedCategory, selectedRarity)
+            end)
+
+            if success and result then
+                statusLabel.Text = "✅ 생성 완료! " .. (result.templateId or "")
+                statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                task.delay(1.5, closePopup)
+            else
+                statusLabel.Text = "❌ 생성 실패: " .. tostring(result)
+                statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                createBtn.Text = "✨ UGC 생성하기"
+                createBtn.Active = true
+            end
+        else
+            statusLabel.Text = "❌ 서버 기능을 찾을 수 없습니다"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            createBtn.Text = "✨ UGC 생성하기"
+            createBtn.Active = true
+        end
+    end)
+
+    cancelBtn.MouseButton1Click:Connect(closePopup)
+    overlay.MouseButton1Click:Connect(closePopup)
+
+    -- 포커스
+    promptInput:CaptureFocus()
+end
+
+-------------------------------------------------------
+-- 관리자 모드 설정 (관리자만 UGC 생성 버튼 표시)
+-------------------------------------------------------
+function GachaUI.SetAdminMode(isAdmin)
+    if not GachaUI.panel then return end
+    local ugcBtn = GachaUI.panel:FindFirstChild("UGCCreateBtn")
+    if ugcBtn then
+        ugcBtn.Visible = isAdmin
+    end
 end
 
 return GachaUI

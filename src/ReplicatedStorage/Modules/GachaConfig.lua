@@ -18,49 +18,38 @@ GachaConfig.RarityWeights = {
     [Rarity.Mythic]    = 100,   --  1%
 }
 
--- 기본 아이템 목록 (정적)
+-- 기본 아이템 목록 (정적) - UGC와 함께 기본 아이템도 사용
 local baseItems = {
-    -- 무기
-    { templateId = "WPN_SWORD_01",  weight = 100 },
-    { templateId = "WPN_BOW_01",    weight = 100 },
-    { templateId = "WPN_WAND_01",   weight = 100 },
-    { templateId = "WPN_KATANA_01", weight = 100 },
-    { templateId = "WPN_STAFF_01",  weight = 100 },
-    -- 펫
-    { templateId = "PET_CAT_01",     weight = 100 },
-    { templateId = "PET_DOG_01",     weight = 100 },
-    { templateId = "PET_DRAGON_01",  weight = 100 },
-    { templateId = "PET_PHOENIX_01", weight = 100 },
-    { templateId = "PET_UNICORN_01", weight = 100 },
-    -- 코스튬
-    { templateId = "CST_HOOD_01",   weight = 100 },
-    { templateId = "CST_ARMOR_01",  weight = 100 },
-    { templateId = "CST_ROBE_01",   weight = 100 },
-    { templateId = "CST_WING_01",   weight = 100 },
-    { templateId = "CST_AURA_01",   weight = 100 },
+    -- Common 아이템 (UGC 부족 시 폴백용)
+    { templateId = "WPN_SWORD_01", weight = 100 },
+    { templateId = "PET_CAT_01", weight = 100 },
+    { templateId = "CST_HOOD_01", weight = 100 },
 }
 
 -- 가차 풀 정의
 GachaConfig.Pools = {
     standard_v1 = {
         poolId = "standard_v1",
-        displayName = "일반 가차",
-        description = "모든 아이템이 포함된 기본 가차",
+        displayName = "AI 생성 가차",
+        description = "AI가 생성한 유니크한 액세서리만 등장",
         items = baseItems,  -- 초기화 시 UGC 아이템 추가됨
     },
 }
 
--- 가차 풀에 UGC 아이템 추가
+-- 가차 풀에 UGC 아이템 추가 (기본 아이템 + UGC)
 function GachaConfig.RefreshPool(poolId)
     poolId = poolId or "standard_v1"
     local pool = GachaConfig.Pools[poolId]
     if not pool then return end
 
-    -- 기본 아이템으로 리셋
+    -- 풀 초기화
     pool.items = {}
+
+    -- 기본 아이템 추가
     for _, item in ipairs(baseItems) do
         table.insert(pool.items, item)
     end
+    print(string.format("[GachaConfig] 기본 아이템 %d개 추가", #baseItems))
 
     -- UGC 아이템 추가
     local UGCDatabase = require(script.Parent.UGCDatabase)
@@ -69,8 +58,21 @@ function GachaConfig.RefreshPool(poolId)
         table.insert(pool.items, item)
     end
 
-    print(string.format("[GachaConfig] 가차 풀 갱신: %d개 아이템 (UGC: %d개)",
-        #pool.items, #ugcItems))
+    print(string.format("[GachaConfig] 가차 풀 갱신: 총 %d개 아이템 (기본 %d개 + UGC %d개)",
+        #pool.items, #baseItems, #ugcItems))
+
+    -- 희귀도별 확인
+    local rarityCount = {}
+    for _, entry in ipairs(pool.items) do
+        local ItemDatabase = require(script.Parent.ItemDatabase)
+        local template = ItemDatabase.GetTemplate(entry.templateId)
+        if template then
+            rarityCount[template.rarity] = (rarityCount[template.rarity] or 0) + 1
+        end
+    end
+    for rarity, count in pairs(rarityCount) do
+        print(string.format("[GachaConfig]   %s: %d개", rarity, count))
+    end
 end
 
 -- 초기화 시 UGC 아이템 로드

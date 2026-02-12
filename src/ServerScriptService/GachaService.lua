@@ -3,15 +3,34 @@
     가차 실행 — 확률 결정 / 아이템 선택 / 지급 (서버 SSOT)
 ]]
 
-local Constants = require(game.ReplicatedStorage.Modules.Constants)
-local GachaConfig = require(game.ReplicatedStorage.Modules.GachaConfig)
-local ItemDatabase = require(game.ReplicatedStorage.Modules.ItemDatabase)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Constants = require(ReplicatedStorage.Modules.Constants)
+local GachaConfig = require(ReplicatedStorage.Modules.GachaConfig)
+local ItemDatabase = require(ReplicatedStorage.Modules.ItemDatabase)
 local CurrencyService = require(script.Parent.CurrencyService)
 local InventoryService = require(script.Parent.InventoryService)
 local DataManager = require(script.Parent.DataManager)
 local LLMClient = require(script.Parent.LLMClient)
 
 local GachaService = {}
+
+-- 로그 레벨 (GameConfig에서 가져오거나 기본값 사용)
+local VERBOSE = false -- 상세 로그 활성화 여부
+
+local function logDebug(...)
+    if VERBOSE then
+        print("[GachaService]", ...)
+    end
+end
+
+local function logInfo(...)
+    print("[GachaService]", ...)
+end
+
+local function logWarn(...)
+    warn("[GachaService]", ...)
+end
 
 -- 희귀도 결정 (가중치 랜덤)
 function GachaService._rollRarity()
@@ -37,18 +56,31 @@ end
 -- 풀 내에서 해당 희귀도 아이템 중 랜덤 선택
 function GachaService._pickItem(poolId, rarity)
     local pool = GachaConfig.Pools[poolId]
-    if not pool then return nil end
+    if not pool then
+        logWarn("풀을 찾을 수 없음:", poolId)
+        return nil
+    end
+
+    logDebug("풀 아이템 수:", #pool.items, "희귀도:", rarity)
 
     -- 해당 희귀도에 해당하는 아이템만 필터
     local candidates = {}
     local totalWeight = 0
     for _, entry in ipairs(pool.items) do
         local template = ItemDatabase.GetTemplate(entry.templateId)
+        if template then
+            logDebug("아이템 확인:", entry.templateId, "희귀도:", template.rarity, "대상 희귀도:", rarity)
+        else
+            logWarn("템플릿을 찾을 수 없음:", entry.templateId)
+        end
+
         if template and template.rarity == rarity then
             table.insert(candidates, entry)
             totalWeight = totalWeight + entry.weight
         end
     end
+
+    logDebug("후보 아이템 수:", #candidates)
 
     if #candidates == 0 then return nil end
 
@@ -57,6 +89,7 @@ function GachaService._pickItem(poolId, rarity)
     for _, entry in ipairs(candidates) do
         cumulative = cumulative + entry.weight
         if roll <= cumulative then
+            logDebug("선택된 아이템:", entry.templateId)
             return entry.templateId
         end
     end
@@ -113,7 +146,7 @@ function GachaService._executeSinglePull(userId, poolId)
     local llmSource = "preset"
 
     if LLMClient.IsEnabled() and template then
-        print("[GachaService] LLM 활성화됨 - 동기 요청 시작:", templateId)
+        logDebug("LLM 활성화됨 - 동기 요청 시작:", templateId)
         local startTime = os.time()
 
         -- 동기 LLM 요청 (응답을 기다림)
@@ -126,7 +159,7 @@ function GachaService._executeSinglePull(userId, poolId)
         )
 
         local elapsed = os.time() - startTime
-        print("[GachaService] LLM 응답 시간:", elapsed, "초")
+        logDebug("LLM 응답 시간:", elapsed, "초")
 
         if llmResult and llmResult.success and llmResult.source ~= "fallback" then
             -- LLM 생성 성공 - 결과 사용
@@ -134,13 +167,13 @@ function GachaService._executeSinglePull(userId, poolId)
             itemDesc = llmResult.description or itemDesc
             itemFlavor = llmResult.flavorText or itemFlavor
             llmSource = llmResult.source or "llm"
-            print("[GachaService] LLM 텍스트 생성 성공:", itemName, "-", llmSource)
+            logDebug("LLM 텍스트 생성 성공:", itemName, "-", llmSource)
         else
             -- LLM 실패 - 프리셋 사용
-            print("[GachaService] LLM 텍스트 생성 실패 - 프리셋 사용")
+            logDebug("LLM 텍스트 생성 실패 - 프리셋 사용")
         end
     else
-        print("[GachaService] LLM 비활성화 또는 템플릿 없음 - 프리셋 사용")
+        logDebug("LLM 비활성화 또는 템플릿 없음 - 프리셋 사용")
     end
 
     return {

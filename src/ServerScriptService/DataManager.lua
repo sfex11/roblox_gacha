@@ -5,8 +5,9 @@
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Constants = require(game.ReplicatedStorage.Modules.Constants)
+local Constants = require(ReplicatedStorage.Modules.Constants)
 local GameConfig = require(script.Parent.GameConfig)
 
 local DataManager = {}
@@ -124,6 +125,10 @@ function DataManager.LoadData(player)
     end
 
     playerDataCache[userId] = data
+
+    -- 로깅: 초기 재화 확인
+    print(string.format("[DataManager] %s 데이터 로드 완료 - Coins: %d, Tickets: %d",
+        userId, data.currency.Coins, data.currency.Tickets))
 
     -- 일일 티켓 리셋 확인
     DataManager._checkDailyReset(userId)

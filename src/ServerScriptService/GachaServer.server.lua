@@ -1,25 +1,88 @@
 --[[
-    MainServer.lua
+    GachaServer.server.lua
     서버 진입점 — RemoteEvent 생성 및 서비스 연결
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- 서비스 로드 (Rojo: init.server.lua이므로 하위 모듈은 script.X)
-local DataManager = require(script.DataManager)
-local GachaService = require(script.GachaService)
-local CurrencyService = require(script.CurrencyService)
-local InventoryService = require(script.InventoryService)
-local CodexService = require(script.CodexService)
-local MinigameService = require(script.MinigameService)
-local LLMClient = require(script.LLMClient)
-local GameConfig = require(script.GameConfig)
-local UGCPipeline = require(script.UGCPipeline)  -- UGC 자동화 파이프라인
-local UGCEquipService = require(script.UGCEquipService)
+local Constants = require(ReplicatedStorage.Modules.Constants)
+
+-------------------------------------------------------
+-- RemoteEvent / RemoteFunction 생성 (서버 로직 로드보다 먼저)
+-------------------------------------------------------
+local remotes = {}
+
+local REMOTE_FUNCTIONS = {
+    RequestOddsTable = true,
+    RequestInventory = true,
+    RequestCodex = true,
+    RequestCurrency = true,
+}
+
+local function getOrCreateRemote(name)
+    local expectedClass = REMOTE_FUNCTIONS[name] and "RemoteFunction" or "RemoteEvent"
+
+    local existing = ReplicatedStorage:FindFirstChild(name)
+    if existing then
+        if existing.ClassName == expectedClass then
+            remotes[name] = existing
+            return existing
+        end
+
+        warn(string.format("[MainServer] Remote 타입 불일치(재생성): %s expected=%s actual=%s", name, expectedClass, existing.ClassName))
+        existing:Destroy()
+    end
+
+    local remote = Instance.new(expectedClass)
+    remote.Name = name
+    remote.Parent = ReplicatedStorage
+    remotes[name] = remote
+    return remote
+end
+
+for name, _ in pairs(Constants.Remotes) do
+    getOrCreateRemote(name)
+end
+
+print("[MainServer] Remotes 준비 완료")
+
+-- 서비스 로드 (Rojo: ServerScriptService 하위 모듈)
+local function safeRequireLocal(name)
+    local module = script:FindFirstChild(name) or script.Parent:FindFirstChild(name)
+    if not module then
+        error(string.format("[MainServer] 로컬 모듈을 찾을 수 없음: %s", tostring(name)))
+    end
+
+    local ok, result = pcall(require, module)
+    if not ok then
+        warn(string.format("[MainServer] 모듈 로드 실패: %s", tostring(name)))
+        error(tostring(result))
+    end
+
+    return result
+end
+
+local DataManager = safeRequireLocal("DataManager")
+local GachaService = safeRequireLocal("GachaService")
+local CurrencyService = safeRequireLocal("CurrencyService")
+local InventoryService = safeRequireLocal("InventoryService")
+local CodexService = safeRequireLocal("CodexService")
+local MinigameService = safeRequireLocal("MinigameService")
+local LLMClient = safeRequireLocal("LLMClient")
+local GameConfig = safeRequireLocal("GameConfig")
+local UGCPipeline = safeRequireLocal("UGCPipeline")
+local UGCEquipService = safeRequireLocal("UGCEquipService")
 local UGCDatabase = require(ReplicatedStorage.Modules.UGCDatabase)
 local ItemDatabase = require(ReplicatedStorage.Modules.ItemDatabase)
-local Constants = require(ReplicatedStorage.Modules.Constants)
+
+local RunService = game:GetService("RunService")
+
+-- 미니게임 서비스에 Remote 주입
+MinigameService.SetRemotes(
+    remotes[Constants.Remotes.MinigameStateUpdate],
+    remotes[Constants.Remotes.MinigameResult]
+)
 
 -------------------------------------------------------
 -- 간단 레이트리밋/입력 검증
@@ -43,42 +106,18 @@ local function canCall(player, action, cooldownSeconds)
 end
 
 -------------------------------------------------------
--- RemoteEvent / RemoteFunction 생성
--------------------------------------------------------
-local remotes = {}
-
-local function createRemote(name, className)
-    className = className or "RemoteEvent"
-    local remote = Instance.new(className)
-    remote.Name = name
-    remote.Parent = ReplicatedStorage
-    remotes[name] = remote
-    return remote
-end
-
-for name, _ in pairs(Constants.Remotes) do
-    if name == "RequestOddsTable" or name == "RequestInventory"
-        or name == "RequestCodex" or name == "RequestCurrency" then
-        createRemote(name, "RemoteFunction")
-    else
-        createRemote(name)
-    end
-end
-
--- 미니게임 서비스에 Remote 주입
-MinigameService.SetRemotes(
-    remotes[Constants.Remotes.MinigameStateUpdate],
-    remotes[Constants.Remotes.MinigameResult]
-)
-
--------------------------------------------------------
 -- 플레이어 입장/퇴장
 -------------------------------------------------------
 Players.PlayerAdded:Connect(function(player)
     local data = DataManager.LoadData(player)
-    -- 클라이언트에 로딩 완료 알림
+    print("[MainServer] 플레이어 입장:", player.UserId, "시작 재화:", data.currency.Coins, data.currency.Tickets)
+
+    -- 클라이언트에 로딩 완료 알림 (data에서 직접 가져오기)
     remotes[Constants.Remotes.PlayerDataLoaded]:FireClient(player, {
-        currency = CurrencyService.GetAllCurrency(player.UserId),
+        currency = {
+            Coins = data.currency.Coins or 10000,
+            Tickets = data.currency.Tickets or 100,
+        },
     })
 
     -- 캐릭터 리스폰 시 UGC 재장착
@@ -302,5 +341,71 @@ end)
 -------------------------------------------------------
 UGCPipeline.SetupAdminCommands()
 print("[MainServer] UGC 파이프라인 관리자 명령어 활성화 (!ugc_make <프롬프트>)")
+
+-------------------------------------------------------
+-- UGC 생성 RemoteFunction (관리자 전용)
+-------------------------------------------------------
+local ugcCreateFunc = Instance.new("RemoteFunction")
+ugcCreateFunc.Name = "UGCCreateItem"
+ugcCreateFunc.Parent = ReplicatedStorage
+
+ugcCreateFunc.OnServerInvoke = function(player, prompt, category, rarity)
+    -- 관리자 권한 확인 (GameConfig 사용)
+    if not GameConfig.IsAdmin(player, RunService) then
+        warn(string.format("[MainServer] 비권한 UGC 생성 시도: userId=%d name=%s", player.UserId, player.Name))
+        return { success = false, error = "권한이 없습니다." }
+    end
+
+    -- 입력 검증
+    if type(prompt) ~= "string" or prompt == "" then
+        return { success = false, error = "프롬프트를 입력해주세요." }
+    end
+
+    if type(category) ~= "string" or category == "" then
+        category = "Hat"
+    end
+
+    if type(rarity) ~= "string" or rarity == "" then
+        rarity = "Rare"
+    end
+
+    print(string.format("[MainServer] UGC 생성 요청: userId=%d prompt='%s' category=%s rarity=%s",
+        player.UserId, prompt, category, rarity))
+
+    -- UGC 절차적 생성
+    local result = UGCPipeline.GenerateProceduralUGC(prompt, {
+        rarity = rarity,
+        category = category,
+        theme = "default",
+    })
+
+    if not result or not result.templateId then
+        return { success = false, error = "UGC 생성 실패 (백엔드 연결 확인 필요)" }
+    end
+
+    local templateId = result.templateId
+
+    -- 즉시 지급 + 장착
+    local okAdd, addOrErr = InventoryService.AddItem(player.UserId, templateId)
+    if okAdd then
+        InventoryService.Equip(player.UserId, addOrErr.slotIndex)
+    else
+        warn(string.format("[MainServer] 인벤토리 지급 실패(무시하고 장착 시도): %s", tostring(addOrErr)))
+    end
+
+    local okEquip = UGCEquipService.Equip(player, templateId)
+
+    print(string.format("[MainServer] UGC 생성/장착 %s: %s (%s/%s)",
+        okEquip and "성공" or "실패",
+        templateId,
+        rarity,
+        category))
+
+    return {
+        success = true,
+        templateId = templateId,
+        spec = result.spec,
+    }
+end
 
 print("[MainServer] 가차 게임 서버 초기화 완료")

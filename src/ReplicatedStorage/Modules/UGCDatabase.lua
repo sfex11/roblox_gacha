@@ -214,7 +214,18 @@ end
 
 -- 샘플 UGC 아이템 초기화 (테스트용)
 local function initSampleItems()
-    -- 귀여운 고양이 귀
+    -- Common (일반)
+    UGCDatabase.RegisterItem({
+        name = "단순한 챙 모자",
+        description = "AI가 디자인한 심플한 챙 모자",
+        flavorText = "햇살을 가리는 최고의 선택",
+        rarity = Rarity.Common,
+        ugcType = UGCType.Hat,
+        stats = { sunProtection = 5 },
+        weight = 100,
+    })
+
+    -- Rare (레어)
     UGCDatabase.RegisterItem({
         name = "귀여운 고양이 귀",
         description = "AI가 디자인한 귀여운 고양이 귀 액세서리",
@@ -225,7 +236,28 @@ local function initSampleItems()
         weight = 100,
     })
 
-    -- 황금 왕관
+    -- Epic (에픽)
+    UGCDatabase.RegisterItem({
+        name = "우주 탐험가 헬멧",
+        description = "AI가 디자인한 우주 탐험용 헬멧",
+        flavorText = "별을 향해!",
+        rarity = Rarity.Epic,
+        ugcType = UGCType.Hat,
+        stats = { defense = 15 },
+        weight = 80,
+    })
+
+    UGCDatabase.RegisterItem({
+        name = "신비한 보석 머리띠",
+        description = "AI가 생성한 반짝이는 보석 머리띠",
+        flavorText = "빛이 머무는 곳",
+        rarity = Rarity.Epic,
+        ugcType = UGCType.Hat,
+        stats = { magic = 20 },
+        weight = 70,
+    })
+
+    -- Legendary (전설)
     UGCDatabase.RegisterItem({
         name = "화려한 황금 왕관",
         description = "AI가 생성한 화려한 황금 왕관",
@@ -236,15 +268,25 @@ local function initSampleItems()
         weight = 50,
     })
 
-    -- 우주 헬멧
+    -- Mythic (신화)
     UGCDatabase.RegisterItem({
-        name = "우주 탐험가 헬멧",
-        description = "AI가 디자인한 우주 탐험용 헬멧",
-        flavorText = "별을 향해!",
-        rarity = Rarity.Epic,
+        name = "용의 뿔 헬멧",
+        description = "AI가 창조한 고대 용의 뿔이 달린 신화의 헬멧",
+        flavorText = "천년의 용의 힘이 깃들어 있다",
+        rarity = Rarity.Mythic,
         ugcType = UGCType.Hat,
-        stats = { defense = 15 },
-        weight = 80,
+        stats = { dragonPower = 100 },
+        weight = 20,
+    })
+
+    UGCDatabase.RegisterItem({
+        name = "천사의 고리",
+        description = "AI가 디자인한 빛나는 천사의 고리 헤어피스",
+        flavorText = "신성한 빛이 당신을 감쌉니다",
+        rarity = Rarity.Mythic,
+        ugcType = UGCType.Hat,
+        stats = { holiness = 80 },
+        weight = 15,
     })
 end
 

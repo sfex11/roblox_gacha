@@ -19,6 +19,15 @@ HubUI.currency = { Coins = 0, Tickets = 0 }
 -- 현재 열려있는 패널
 HubUI.activePanel = nil
 
+-- 로그 레벨
+local VERBOSE = false
+
+local function logDebug(...)
+    if VERBOSE then
+        print("[HubUI]", ...)
+    end
+end
+
 -------------------------------------------------------
 -- 메인 ScreenGui 생성
 -------------------------------------------------------
@@ -116,20 +125,25 @@ end
 
 -- 재화 업데이트
 function HubUI.UpdateCurrency(currencyData)
+    logDebug("UpdateCurrency 호출:", currencyData)
     HubUI.currency = currencyData
     local gui = HubUI.screenGui
-    if not gui then return end
+    if not gui then
+        return
+    end
 
     local bar = gui:FindFirstChild("CurrencyBar")
-    if bar then
-        local coinLabel = bar:FindFirstChild("CoinLabel")
-        local ticketLabel = bar:FindFirstChild("TicketLabel")
-        if coinLabel then
-            coinLabel.Text = "Coin " .. tostring(currencyData.Coins or 0)
-        end
-        if ticketLabel then
-            ticketLabel.Text = "Ticket " .. tostring(currencyData.Tickets or 0)
-        end
+    if not bar then
+        return
+    end
+
+    local coinLabel = bar:FindFirstChild("CoinLabel")
+    local ticketLabel = bar:FindFirstChild("TicketLabel")
+    if coinLabel then
+        coinLabel.Text = "Coin " .. tostring(currencyData.Coins or 0)
+    end
+    if ticketLabel then
+        ticketLabel.Text = "Ticket " .. tostring(currencyData.Tickets or 0)
     end
 end
 

@@ -149,12 +149,7 @@ function DataManager.SaveData(player)
 
     local key = "player_" .. tostring(userId)
     local success, err = pcall(function()
-        ds:UpdateAsync(key, function(old)
-            if type(old) == "table" then
-                old = deepMergeDefaults(getDefaultData(), old)
-            end
-            return data
-        end)
+        ds:SetAsync(key, data)
     end)
 
     if not success then

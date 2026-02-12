@@ -85,7 +85,7 @@ app.use("/api/modeling", authMiddleware);
 app.use("/api/modeling", modelingRouter);
 
 // ─── Studio MCP API (Roblox Studio 통신) ─────────────────────
-app.use("/api/studio-mcp", studioMcpRouter);
+app.use("/api/studio-mcp", authMiddleware, studioMcpRouter);
 
 // ─── 단일 아이템 텍스트 생성 ─────────────────────────
 app.post("/api/generate", async (req, res) => {

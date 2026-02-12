@@ -22,7 +22,11 @@ local MinigameUI = require(script.MinigameUI)
 -------------------------------------------------------
 local function waitForRemote(name, className)
     className = className or "RemoteEvent"
-    return ReplicatedStorage:WaitForChild(name)  -- 타임아웃 제거 (서버가 생성하면 바로 나타남)
+    local remote = ReplicatedStorage:WaitForChild(name, 15)
+    if not remote then
+        warn("[MainClient] Remote 대기 타임아웃:", name)
+    end
+    return remote
 end
 
 local remotes = {}
@@ -202,7 +206,12 @@ if buttonArea then
             end
         end
 
-        return function() end  -- 폴백
+        -- 폴백: 애니메이션 없이 상태만 복원
+        isGachaInProgress = false
+        if singleCoinBtn then singleCoinBtn.Active = true end
+        if multiCoinBtn then multiCoinBtn.Active = true end
+        if ticketBtn then ticketBtn.Active = true end
+        return function() end
     end
 
     if singleCoinBtn then

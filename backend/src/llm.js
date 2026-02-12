@@ -68,12 +68,16 @@ async function generateItemText(params) {
     const keywordStr =
         keywords.length > 0 ? `키워드: ${keywords.join(", ")}` : "";
 
-    const systemPrompt = `아이템 텍스트 생성. JSON만 출력.`;
+    const systemPrompt = `너는 가차 게임의 아이템 텍스트 작성자다. ${toneGuide}
+반드시 JSON 형식으로만 출력하라. 다른 텍스트 없이 JSON만.
+출력 형식: {"name":"string","description":"string","flavorText":"string","tagsSuggested":["string"]}`;
 
-    const userPrompt = `${category} ${rarity} ${baseName}
-${tone} 톤으로 이름/설명/대사 생성:
-
-{"name":"${baseName}+","description":"강력한 무기다","flavorText":"전설의 아이템","tagsSuggested":["${rarity}","${category}"]}`;
+    const userPrompt = `카테고리: ${category}
+희귀도: ${rarity}
+기본 이름: ${baseName}
+${keywordStr}
+위 아이템의 고유한 이름, 설명(1~2문장), 대사(캐릭터가 말하는 것처럼)를 생성하라.
+tagsSuggested에는 관련 태그 2~3개를 넣어라.`;
 
     try {
         console.log("[llm.js] GLM 클라이언트 가져오는 중...");
@@ -90,13 +94,11 @@ ${tone} 톤으로 이름/설명/대사 생성:
             temperature: config.llm.temperature,
         });
 
-        console.log("[llm.js] GLM API 응답 (전체):", JSON.stringify(response, null, 2));
         console.log("[llm.js] GLM API 응답 수신 - choices 수:", response.choices?.length);
 
         // GLM-4.7은 reasoning_content에 응답이 담겨 있음
         const message = response.choices[0]?.message || {};
         const text = message.reasoning_content || message.content || "";
-        console.log("[llm.js] 생성된 텍스트 (전체):", text);
         console.log("[llm.js] 생성된 텍스트 길이:", text.length);
 
         // JSON 추출 (코드블록 감싸기 대응)

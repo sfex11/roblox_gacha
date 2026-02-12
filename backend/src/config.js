@@ -42,4 +42,8 @@ const config = {
     ],
 };
 
+if (config.robloxSharedSecret === "dev-secret") {
+    console.warn("[config] 경고: 기본 시크릿 'dev-secret' 사용 중. 프로덕션에서는 ROBLOX_SHARED_SECRET 환경변수를 설정하세요.");
+}
+
 module.exports = config;

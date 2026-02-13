@@ -70,7 +70,7 @@ local function adjustColor(color, amount)
 end
 
 local STYLE_MATERIAL_MAP = {
-    matte = Enum.Material.Matte,
+    matte = Enum.Material.SmoothPlastic,
     glossy = Enum.Material.SmoothPlastic,
     metallic = Enum.Material.Metal,
     emissive = Enum.Material.Neon,

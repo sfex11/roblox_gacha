@@ -517,11 +517,11 @@ async function generateModel(spec) {
             }
         });
 
-        // 타임아웃 (30초)
+        // 타임아웃 (2분)
         setTimeout(() => {
             blender.kill();
-            reject(new Error("Blender 타임아웃 (30초)"));
-        }, 30000);
+            reject(new Error("Blender 타임아웃 (2분)"));
+        }, 120000);
     });
 }
 

@@ -543,6 +543,7 @@ function GachaUI.ShowUGCCreatePopup()
     title.TextColor3 = Color3.fromRGB(150, 130, 255)
     title.TextSize = 22
     title.Font = Enum.Font.GothamBold
+    title.ZIndex = 3
     title.Parent = panel
 
     -- 프롬프트 입력
@@ -555,6 +556,7 @@ function GachaUI.ShowUGCCreatePopup()
     promptLabel.TextSize = 13
     promptLabel.Font = Enum.Font.Gotham
     promptLabel.TextXAlignment = Enum.TextXAlignment.Left
+    promptLabel.ZIndex = 3
     promptLabel.Parent = panel
 
     local promptInput = Instance.new("TextBox")
@@ -569,6 +571,7 @@ function GachaUI.ShowUGCCreatePopup()
     promptInput.TextSize = 14
     promptInput.Font = Enum.Font.Gotham
     promptInput.ClearTextOnFocus = false
+    promptInput.ZIndex = 3
     promptInput.Parent = panel
 
     local inputCorner = Instance.new("UICorner")
@@ -585,6 +588,7 @@ function GachaUI.ShowUGCCreatePopup()
     categoryLabel.TextSize = 13
     categoryLabel.Font = Enum.Font.Gotham
     categoryLabel.TextXAlignment = Enum.TextXAlignment.Left
+    categoryLabel.ZIndex = 3
     categoryLabel.Parent = panel
 
     local categoryFrame = Instance.new("Frame")
@@ -592,6 +596,7 @@ function GachaUI.ShowUGCCreatePopup()
     categoryFrame.Size = UDim2.new(1, -40, 0, 35)
     categoryFrame.Position = UDim2.new(0, 20, 0, 160)
     categoryFrame.BackgroundTransparency = 1
+    categoryFrame.ZIndex = 3
     categoryFrame.Parent = panel
 
     local categoryLayout = Instance.new("UIListLayout")
@@ -611,6 +616,7 @@ function GachaUI.ShowUGCCreatePopup()
         btn.TextColor3 = Color3.fromRGB(180, 180, 180)
         btn.TextSize = 11
         btn.Font = Enum.Font.Gotham
+        btn.ZIndex = 4
         btn.Parent = categoryFrame
 
         local btnCorner = Instance.new("UICorner")
@@ -648,6 +654,7 @@ function GachaUI.ShowUGCCreatePopup()
     rarityLabel.TextSize = 13
     rarityLabel.Font = Enum.Font.Gotham
     rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+    rarityLabel.ZIndex = 3
     rarityLabel.Parent = panel
 
     local rarityFrame = Instance.new("Frame")
@@ -655,6 +662,7 @@ function GachaUI.ShowUGCCreatePopup()
     rarityFrame.Size = UDim2.new(1, -40, 0, 35)
     rarityFrame.Position = UDim2.new(0, 20, 0, 230)
     rarityFrame.BackgroundTransparency = 1
+    rarityFrame.ZIndex = 3
     rarityFrame.Parent = panel
 
     local rarityLayout = Instance.new("UIListLayout")
@@ -680,6 +688,7 @@ function GachaUI.ShowUGCCreatePopup()
         btn.TextColor3 = Color3.new(1, 1, 1)
         btn.TextSize = 10
         btn.Font = Enum.Font.GothamBold
+        btn.ZIndex = 4
         btn.Parent = rarityFrame
 
         local btnCorner = Instance.new("UICorner")
@@ -701,6 +710,7 @@ function GachaUI.ShowUGCCreatePopup()
     createBtn.TextColor3 = Color3.new(1, 1, 1)
     createBtn.TextSize = 16
     createBtn.Font = Enum.Font.GothamBold
+    createBtn.ZIndex = 3
     createBtn.Parent = panel
 
     local createBtnCorner = Instance.new("UICorner")
@@ -717,6 +727,7 @@ function GachaUI.ShowUGCCreatePopup()
     cancelBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
     cancelBtn.TextSize = 13
     cancelBtn.Font = Enum.Font.Gotham
+    cancelBtn.ZIndex = 3
     cancelBtn.Parent = panel
 
     local cancelBtnCorner = Instance.new("UICorner")
@@ -733,6 +744,7 @@ function GachaUI.ShowUGCCreatePopup()
     statusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
     statusLabel.TextSize = 12
     statusLabel.Font = Enum.Font.Gotham
+    statusLabel.ZIndex = 3
     statusLabel.Parent = panel
 
     -- 닫기 함수

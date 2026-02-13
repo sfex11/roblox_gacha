@@ -13,7 +13,7 @@
  */
 
 // 환경 변수 로드 (먼저 실행)
-require("dotenv").config();
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 
 const express = require("express");
 const helmet = require("helmet");

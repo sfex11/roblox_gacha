@@ -15,7 +15,7 @@ function getGlmClient() {
         glmClient = new OpenAI({
             apiKey: config.zaiApiKey,
             baseURL: config.llm.glmBaseUrl,
-            timeout: 15000, // 15초 타임아웃
+            timeout: 60000, // 60초 타임아웃 (GLM-4.7 reasoning 모델 대응)
         });
     }
     return glmClient;

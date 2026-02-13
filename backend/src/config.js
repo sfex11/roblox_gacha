@@ -6,7 +6,7 @@ const config = {
     robloxSharedSecret: process.env.ROBLOX_SHARED_SECRET || "dev-secret",
     authMode: process.env.ROBLOX_AUTH_MODE || "simple", // "simple" | "signature"
     cacheTtl: parseInt(process.env.CACHE_TTL || "3600", 10),
-    llmTimeout: parseInt(process.env.LLM_TIMEOUT || "30000", 10),  // 30초로 증가
+    llmTimeout: parseInt(process.env.LLM_TIMEOUT || "120000", 10),  // 120초로 증가 (GLM-4.7 reasoning 모델 대응)
 
     // LLM 프롬프트 설정
     llm: {

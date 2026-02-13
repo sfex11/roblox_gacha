@@ -16,8 +16,8 @@ const http = require("http");
 const CONFIG = {
     host: "127.0.0.1",
     port: 44755,
-    longPollTimeout: 15000, // 15초 (Studio MCP와 동일)
-    requestTimeout: 20000,  // 전체 요청 타임아웃
+    longPollTimeout: 30000, // 30초 (Studio MCP와 동일)
+    requestTimeout: 60000,  // 60초 전체 요청 타임아웃
     maxRetries: 3,
     retryDelay: 1000,
 };
